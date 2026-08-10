@@ -1,0 +1,46 @@
+<template>
+    <div class="page">
+      <text class="loading-text">加载中...</text>
+    </div>
+  </template>
+  
+  <style>
+  .page {
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: #000000;
+  }
+  .loading-text {
+    font-size: 15px;
+    color: #ffffff;
+  }
+  </style>
+  
+  <script>
+  import router from '@system.router'
+  import storage from '@system.storage'
+  
+  export default {
+    onInit() {
+      // 读取上次点击的目标页面路径
+      storage.get({
+        key: 'lastTargetPage',
+        success: (value) => {
+          if (value) {
+            // 跳转到目标页面，使用 replace 避免回到加载页
+            router.replace({ uri: value })
+          } else {
+            // 没有记录
+            router.replace({ uri: '/pages/Leijun' })
+          }
+        },
+        fail: () => {
+            router.replace({ uri: '/pages/Leijun' })
+        }
+      })
+    }
+  }
+  </script>

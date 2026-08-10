@@ -1,0 +1,121 @@
+<script>
+import sensor from '@system.sensor'
+import storage from '@system.storage'
+
+export default {
+  props: {
+    cooldown: { default: 500 },
+    interval: { default: 'game' }
+  },
+
+  data: {
+    mode: 'punch',
+    threshold: 20,
+    lastDetectTime: 0,
+    isSubscribed: false
+  },
+
+  onInit() {
+    this.loadConfigAndSubscribe()
+  },
+
+  onDestroy() {
+    if (this.isSubscribed) {
+      sensor.unsubscribeAccelerometer()
+      this.isSubscribed = false
+    }
+  },
+
+  methods: {
+    loadConfigAndSubscribe() {
+      storage.get({
+        key: 'detect_mode',
+        success: (data) => {
+          this.mode = data || 'punch'
+          this.loadSensitivity()
+        },
+        fail: () => this.loadSensitivity()
+      })
+    },
+
+    loadSensitivity() {
+      storage.get({
+        key: 'sensitivity_percent',
+        success: (sensData) => {
+          let percent = sensData ? parseInt(sensData, 10) : 50
+          if (isNaN(percent) || percent < 0) percent = 0
+          if (percent > 100) percent = 100
+          this.threshold = this.calcThreshold(percent)
+          this.subscribeAccelerometer()
+        },
+        fail: () => {
+          this.threshold = this.calcThreshold(50)
+          this.subscribeAccelerometer()
+        }
+      })
+    },
+
+    // 🔧 修改后：100% → 阈值 11（原85%水平），0% → 阈值 45
+    calcThreshold(percent) {
+      return Math.round(45 - (percent / 100) * 34)
+    },
+
+    getAxisAndDirection(mode) {
+      switch (mode) {
+        case 'punch':   return { axis: 'z', direction: 'positive' }
+        case 'sword':   return { axis: 'x', direction: 'either' }
+        case 'gun':     return { axis: 'y', direction: 'negative' }
+        default:        return { axis: 'z', direction: 'positive' }
+      }
+    },
+
+    subscribeAccelerometer() {
+      if (this.isSubscribed) {
+        sensor.unsubscribeAccelerometer()
+        this.isSubscribed = false
+      }
+      sensor.subscribeAccelerometer({
+        interval: this.interval,
+        callback: this.onAccelerometerChange,
+        fail: (msg, code) => console.error('加速度监听失败', msg, code)
+      })
+      this.isSubscribed = true
+    },
+
+    onAccelerometerChange(ret) {
+      const { x, y, z } = ret
+      const { axis, direction } = this.getAxisAndDirection(this.mode)
+      const threshold = this.threshold
+      const cooldown = this.cooldown
+
+      let value
+      switch (axis) {
+        case 'x': value = x; break
+        case 'y': value = y; break
+        case 'z': value = z; break
+        default: return
+      }
+
+      let triggered = false
+      if (direction === 'positive') {
+        triggered = value > threshold
+      } else if (direction === 'negative') {
+        triggered = value < -threshold
+      } else {
+        triggered = Math.abs(value) > threshold
+      }
+
+      if (triggered) {
+        const now = Date.now()
+        if (now - this.lastDetectTime > cooldown) {
+          this.lastDetectTime = now
+          this.$emit('detect', { mode: this.mode, value, axis })
+          if (this.mode === 'punch') this.$emit('punch', { value })
+          else if (this.mode === 'sword') this.$emit('sword', { value })
+          else if (this.mode === 'gun') this.$emit('gun', { value })
+        }
+      }
+    }
+  }
+}
+</script>

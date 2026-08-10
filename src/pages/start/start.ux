@@ -1,0 +1,62 @@
+<template>
+  <div class="page">
+    <image class="image" src="/common/logo.png" ></image>
+  </div>
+</template>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #000000;
+}
+.image {
+  width: 60dp;
+  object-fit: contain;
+}
+</style>
+
+<script>
+import router from '@system.router'
+import storage from '@system.storage'
+import audio from '@system.audio'
+
+export default {
+  onInit() {
+    // 1. 播放音频
+    audio.src = '/common/ms.mp3'
+    audio.play()
+    
+    setTimeout(() => {
+  storage.set({ key: 'play_count', value: '0' })
+  storage.set({ key: 'is_locked', value: 'false' })
+  storage.set({ key: 'fixed_play_count', value: '0' })
+  storage.set({ key: 'group_locked', value: 'false' })
+  storage.set({ key: 'locked_group', value: '1' })
+  storage.set({ key: 'group_inner_index', value: '0' })
+  storage.delete({
+        key: 'scroll_position',
+        success: () => console.log('滚动位置已重置'),
+        fail: () => {} // 忽略失败（可能本来就没有）
+      })
+  
+  storage.get({
+    key: 'lastTargetPage',
+    success: (value) => {
+      if (value) {
+        router.replace({ uri: value })
+      } else {
+        router.replace({ uri: '/pages/Quantou' })
+      }
+    },
+    fail: () => {
+      router.replace({ uri: '/pages/Quantou' })
+    }
+  })
+}, 300)
+  }
+}
+</script>

@@ -1,0 +1,307 @@
+<template>
+  <div class="page">
+    <!-- 背景图片层：绝对定位，透明度渐变 -->
+    <image class="bg-image" src="/common/images/封面/不死图腾.png" style="opacity: {{ bgImageOpacity }};"></image>
+    <image class="center-image" src="/common/images/封面/不死图腾.png" onclick="onImageClick"></image>
+    <div class="button-bar">
+      <!-- 手势按钮 → 模式选择 -->
+      <div class="btn-setting" onclick="goToModeSelect">
+        <image class="setting-icon" src="/common/images/手势.png"></image>
+      </div>
+      <!-- 更多音效 → 菜单 -->
+      <div class="btn-setting" onclick="goToMenu">
+        <image class="setting-icon" src="/common/images/more.png"></image>
+      </div>
+      <!-- 设置按钮 → 设置页面 -->
+      <div class="btn-setting" onclick="goToSetting">
+        <image class="setting-icon" src="/common/images/setting.png"></image>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #000000;
+  position: relative;   /* 为背景图片定位 */
+  overflow: hidden;     /* 防止溢出 */
+}
+
+/* 背景图片：居中，固定尺寸，透明度渐变 */
+.bg-image {
+  position: absolute;
+  height: 210dp;
+  transition: opacity 500ms ease;
+  object-fit: contain;
+}
+
+.center-image {
+  height: 75px;
+  margin: 10px;
+  object-fit: contain;
+  z-index: 1; /* 保持在背景之上 */
+}
+
+.button-bar {
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: center;
+  width: 80%;
+  z-index: 1;
+  opacity: 0.85;
+}
+
+.btn-setting {
+  width: 30px;
+  height: 30px;
+  justify-content: center;
+  align-items: center;
+  background-color: #333333;
+  border-radius: 10px;
+}
+
+.setting-icon {
+  width: 20px;
+  height: 20px;
+}
+@media (shape:rect){
+  .center-image{
+    height: 110px;
+    width: 110px;
+    margin: 15%;
+  }
+}
+</style>
+
+<script>
+import sensor from '@system.sensor'
+import audio from '@system.audio'
+import brightness from '@system.brightness'
+import vibrator from '@system.vibrator'
+import storage from '@system.storage'
+import router from '@system.router'
+
+export default {
+  private: {
+    // 动态阈值（由灵敏度计算得出）
+    threshold: 20,
+    COOLDOWN_MS: 1500,
+    lastPlayTime: 0,
+    lastAbove: false,          // 用于边沿触发
+    SOUND_PATH: '/common/sounds/不死图腾.mp3',
+    SOUND_DURATION: 0,
+    isPlaying: false,
+    isSubscribed: false,
+    playTimer: null,
+    vibrationEnabled: true,
+    mode: 'punch',             // 默认模式
+
+    // 背景图片透明度（最大 0.5）
+    bgImageOpacity: 0,
+    coefficientMap: {
+    punch: 33,
+    sword: 35,
+    gun: 35
+  },
+  },
+
+  async onInit() {
+    console.info('页面初始化')
+    await this.loadSettings()
+  },
+
+  onShow() {
+    this.setKeepScreenOn(true)
+    this.loadSettings()
+    if (!this.isSubscribed) this.startAccelerometerListener()
+  },
+
+  onHide() {
+    this.setKeepScreenOn(false)
+    this.stopAccelerometerListener()
+    this.clearPlayTimer()
+    audio.stop()
+    this.isPlaying = false
+  },
+
+  onDestroy() {
+    this.stopAccelerometerListener()
+    this.clearPlayTimer()
+    audio.stop()
+  },
+
+  // ---------- 加载配置 ----------
+  async loadSettings() {
+    try {
+      const modeVal = await this.getStorage('detect_mode')
+      if (modeVal) this.mode = modeVal
+
+      const vibVal = await this.getStorage('vibration_enabled')
+      if (vibVal !== null) this.vibrationEnabled = (vibVal === 'true')
+
+      const sensVal = await this.getStorage('sensitivity_percent')
+      let percent = sensVal ? parseInt(sensVal, 10) : 50
+      if (isNaN(percent) || percent < 0) percent = 0
+      if (percent > 100) percent = 100
+      this.threshold = this.calcThreshold(percent)
+
+      // 读取无冷却配置，兼容字符串和布尔值
+      const noCooldownVal = await this.getStorage('no_cooldown_enabled')
+      if (noCooldownVal !== null) {
+        this.noCooldownEnabled = (noCooldownVal === 'true' || noCooldownVal === true)
+      } else {
+        this.noCooldownEnabled = true
+      }
+      console.log('无冷却状态:', this.noCooldownEnabled)
+    } catch (e) {
+      console.error('加载配置失败', e)
+    }
+  },
+
+  getStorage(key) {
+    return new Promise((resolve) => {
+      storage.get({
+        key: key,
+        success: (data) => resolve(data),
+        fail: () => resolve(null)
+      })
+    })
+  },
+
+  //阈值计算
+  calcThreshold(percent) {
+  const coeff = this.coefficientMap[this.mode] || 35;
+  return Math.round(45 - (percent / 100) * coeff);
+},
+
+  getAxisAndDirection(mode) {
+    switch (mode) {
+      case 'punch':   return { axis: 'z', direction: 'positive' }
+      case 'sword':   return { axis: 'x', direction: 'either' }
+      case 'gun':     return { axis: 'y', direction: 'negative' }
+      default:        return { axis: 'z', direction: 'positive' }
+    }
+  },
+
+  // ---------- 加速度检测 ----------
+  startAccelerometerListener() {
+    if (this.isSubscribed) return
+    sensor.subscribeAccelerometer({
+      interval: 'game',
+      callback: (ret) => {
+        this.checkAccelerationTrigger(ret.x, ret.y, ret.z)
+      },
+      fail: (err) => console.error('加速度监听失败', err)
+    })
+    this.isSubscribed = true
+  },
+
+  stopAccelerometerListener() {
+    if (this.isSubscribed) {
+      sensor.unsubscribeAccelerometer()
+      this.isSubscribed = false
+    }
+  },
+
+  checkAccelerationTrigger(x, y, z) {
+    const now = Date.now();
+    // 仅在无冷却关闭时检查冷却
+    if (!this.noCooldownEnabled && (now - this.lastPlayTime < this.COOLDOWN_MS)) return;
+    // 已移除 isPlaying 阻塞，允许打断重播
+
+    const { axis, direction } = this.getAxisAndDirection(this.mode);
+    const threshold = this.threshold;
+
+    let value;
+    switch (axis) {
+      case 'x': value = x; break;
+      case 'y': value = y; break;
+      case 'z': value = z; break;
+      default: return;
+    }
+
+    let currentAbove = false;
+    if (direction === 'positive') {
+      currentAbove = value > threshold;
+    } else if (direction === 'negative') {
+      currentAbove = value < -threshold;
+    } else {
+      currentAbove = Math.abs(value) > threshold;
+    }
+
+    if (currentAbove && !this.lastAbove) {
+      this.lastAbove = true;
+      this.lastPlayTime = now;
+      this.playSoundSequence();
+    } else if (!currentAbove) {
+      this.lastAbove = false;
+    }
+  },
+
+  // ---------- 音频播放 + 背景图片渐变 ----------
+  playSoundSequence() {
+    // 打断当前播放
+    if (this.vibrationEnabled) {
+      vibrator.vibrate({ mode: 'short' })
+    }
+    this.clearPlayTimer()
+    audio.stop()
+    this.isPlaying = true
+
+    // 背景图片淡入（透明度 0 -> 0.5）
+    this.bgImageOpacity = 0.5
+
+    audio.src = this.SOUND_PATH
+    audio.loop = false
+    audio.play()
+
+    this.playTimer = setTimeout(() => {
+      this.isPlaying = false
+      this.playTimer = null
+    }, this.SOUND_DURATION)
+
+    // 300ms 后背景图片淡出（透明度 0.5 -> 0）
+    setTimeout(() => {
+      this.bgImageOpacity = 0
+    }, 300)
+  },
+
+  // 点击图片触发（与摇动一致）
+  onImageClick() {
+    const now = Date.now()
+    if (!this.noCooldownEnabled && (now - this.lastPlayTime < this.COOLDOWN_MS)) return;
+    // 已移除 isPlaying 阻塞
+    this.lastPlayTime = now
+    this.playSoundSequence()
+  },
+
+  clearPlayTimer() {
+    if (this.playTimer) {
+      clearTimeout(this.playTimer)
+      this.playTimer = null
+    }
+  },
+
+  setKeepScreenOn(keep) {
+    brightness.setKeepScreenOn({ keepScreenOn: keep })
+  },
+
+  // ---------- 页面跳转 ----------
+  goToModeSelect() {
+    router.replace({ uri: '/pages/mode-select' })
+  },
+
+  goToMenu() {
+    router.replace({ uri: '/pages/menu' })
+  },
+
+  goToSetting() {
+    router.replace({ uri: '/pages/setting' })
+  }
+}
+</script>

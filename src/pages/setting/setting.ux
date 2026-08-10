@@ -1,0 +1,463 @@
+<template>
+  <stack class="root-stack">
+    <scroll class="setting-page" scroll-y="true" bounces="true">
+      <block if="{{ !isLoading }}">
+        <!-- 震动反馈开关 -->
+        <div class="section">
+          <div class="switch-container">
+            <text class="switch-label">震动反馈</text>
+            <image 
+              class="switch-image" 
+              src="{{ vibrationEnabled ? '/common/images/true.png' : '/common/images/false.png' }}"
+              onclick="toggleVibrationImage"
+            />
+          </div>
+          <text class="section-text">关闭后，部分操作将不会震动</text>
+        </div>
+
+        <div class="separator"></div>
+
+        <!-- 无冷却时间开关 -->
+        <div class="section">
+          <div class="switch-container">
+            <text class="switch-label">无冷却时间</text>
+            <image 
+              class="switch-image" 
+              src="{{ noCooldownEnabled ? '/common/images/true.png' : '/common/images/false.png' }}"
+              onclick="toggleNoCooldownImage"
+            />
+          </div>
+          <text class="section-text">开启后，音效触发无冷却时间</text>
+        </div>
+
+        <div class="separator"></div>
+
+        <!-- 媒体音量调节（滑块 + 缩放） -->
+        <div class="section">
+          <div class="volume-header">
+            <text class="volume-label">媒体音量</text>
+          </div>
+          <!-- 使用 wrapper 进行整体缩放 -->
+          <div class="slider-scale-wrapper">
+            <slider 
+              class="custom-slider"
+              min="0"
+              max="100"
+              step="10"
+              value="{{ volumePercent }}"
+              onchange="onVolumeChange"
+            />
+          </div>
+          <text class="volume-percent" style="color: #4ccfff;">{{ volumePercent }}%</text>
+        </div>
+
+        <div class="separator"></div>
+
+        <!-- 运动检测灵敏度调节（滑块 + 缩放） -->
+        <div class="section">
+          <div class="volume-header">
+            <text class="volume-label">运动检测灵敏度</text>
+            <text class="tips">数值越小，动作需要越明显</text>
+          </div>
+          <div class="slider-scale-wrapper">
+            <slider 
+              class="custom-slider"
+              min="0"
+              max="100"
+              step="1"
+              value="{{ sensitivityPercent }}"
+              onchange="onSensitivityChange"
+            />
+          </div>
+          <text class="volume-percent" style="color: #4ccfff;">{{ sensitivityPercent }}%</text>
+        </div>
+
+        <div class="separator"></div>
+
+        <!-- 赞助二维码 -->
+        <div class="section">
+          <text class="section-title">赞助一下吧！</text>
+          <qrcode class="qr-code" value="https://www.ifdian.net/a/HuaShu_abc" style="color: #000;"></qrcode>
+          <div class="separator"></div>
+          <text class="section-title">扫码加入QQ群</text>
+          <qrcode class="qr-code" value="https://qm.qq.com/q/QfvpeDee4i" style="color: #000;"></qrcode>
+        </div>
+
+        <!-- 作者与版本号 -->
+        <div class="separator"></div>
+        <div class="section">
+          <div class="author-version-row">
+            <div class="author-info">
+              <image class="avatar" src="/common/桦树abc.png" />
+              <text class="author-name">桦树abc</text>
+            </div>
+            <div class="version-info">
+              <text class="version-label">版本号</text>
+              <text class="version-text" style="color: #00b3ff;" onclick="onVersionTap">{{ appVersion }}</text>
+            </div>
+          </div>
+        </div>
+        <div class="separator"></div>
+        <text class="section-text">素材来源：自制、网络和AI生成</text>
+        <text class="section-text">禁止将本应用用作商业用途</text>
+        <div class="bottom-space"></div>
+      </block>
+
+      <block if="{{ isLoading }}">
+        <text style="color: #ffffff; font-size: 16dp; margin-top: 40dp;">加载中...</text>
+      </block>
+    </scroll>
+    <!-- 返回按钮 -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+    </div>
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+}
+
+.setting-page {
+  margin-top: 30px;
+  flex: 1;
+  flex-direction: column;
+  background-color: #000000;
+  align-items: center;
+}
+
+.tips {
+  font-size: 11dp;
+  color: #888888;
+  margin-top: 1dp;
+}
+
+.switch-container {
+  width: 80%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5dp 8dp;
+  margin: 3dp 0;
+  background-color: #222222;
+  border-radius: 10dp;
+}
+
+.switch-label {
+  font-size: 13dp;
+  color: #ffffff;
+  flex: 1;
+  margin-right: 6dp;
+  line-height: 18dp;
+  font-weight: bold;
+}
+
+.switch-image {
+  width: 30dp;
+  object-fit: contain;
+}
+
+.section-text {
+  font-size: 12dp;
+  color: #cccccc;
+  text-align: center;
+  line-height: 16dp;
+}
+
+.separator {
+  width: 100%;
+  height: 1px;
+  background-color: #444444;
+  margin: 2px 0;
+}
+
+.volume-header {
+  width: 100%;
+  margin-bottom: 4dp;
+  padding-left: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.volume-label {
+  font-size: 13dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+/* ===== 滑块缩放容器 ===== */
+.slider-scale-wrapper {
+  width: 320px;              
+  display: flex;
+  justify-content: center;   /* 居中 */
+  transform: scale(0.6);     /* 整体缩放为 60% */
+  transform-origin: 160px;
+}
+
+/* 滑块本身填满 wrapper */
+.custom-slider {
+  width: 250px;
+  height: 40px;              /* 原始高度，缩放后视觉变小 */
+  padding-left: 18px;
+  padding-right: 18px;
+  color: #444444;
+  selected-color: #4ccfff;
+  block-color: #ffffff;
+}
+
+/* 百分比数字 */
+.volume-percent {
+  text-align: center;
+  margin-top: -2dp;          /* 紧贴滑块 */
+  font-size: 12dp;
+}
+
+.bottom-space {
+  height: 20px;
+  width: 100%;
+}
+
+.section {
+  width: 90%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.section-title {
+  font-size: 13dp;
+  margin-bottom: 3dp;
+  color: #ffffff;
+  text-align: center;
+  font-weight: bold;
+}
+
+.qr-code {
+  width: 90dp;
+  height: 90dp;
+  padding: 3dp;
+  background-color: #ffffff;
+  border-radius: 4px;
+  margin-bottom: 5px;
+}
+
+.author-version-row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 4dp 0;
+}
+
+.author-info {
+  flex-direction: row;
+  align-items: center;
+}
+
+.avatar {
+  width: 35dp;
+  height: 35dp;
+  border-radius: 100%;
+  margin-right: 5dp;
+  object-fit: cover;
+}
+
+.author-name {
+  font-size: 14dp;
+  color: #ffffff;
+}
+
+.version-info {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.version-label {
+  font-size: 11dp;
+  color: #ffffff;
+}
+
+.version-text {
+  font-size: 14dp;
+  color: #00b3ff;
+}
+
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  height: 32dp;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-button-fixed {
+  width: 50dp;
+  height: 20dp;
+  border-radius: 12dp;
+  background-color: #222222;
+  font-size: 11dp;
+  color: #cccccc;
+}
+</style>
+
+<script>
+import audio from '@system.audio'
+import storage from '@system.storage'
+import vibrator from '@system.vibrator'
+import router from '@system.router'
+import app from '@system.app'
+import prompt from '@system.prompt'
+
+const STORAGE_KEYS = {
+  VIBRATION: 'vibration_enabled',
+  SENSITIVITY: 'sensitivity_percent',
+  NO_COOLDOWN: 'no_cooldown_enabled'
+}
+
+export default {
+  private: {
+    isLoading: true,
+    vibrationEnabled: true,
+    noCooldownEnabled: false,
+    volumePercent: 0,
+    sensitivityPercent: 50,
+    appVersion: '',
+    tapCount: 0,
+    lastTapTime: 0,
+    // 防抖定时器
+    volumeTimer: null,
+    sensitivityTimer: null
+  },
+
+  async onInit() {
+    try {
+      const info = app.getInfo()
+      this.appVersion = info.versionName || '未知版本'
+    } catch (err) {
+      console.error('获取版本号失败：', err)
+      this.appVersion = '获取失败'
+    }
+    await this.loadSettings()
+    this.isLoading = false
+  },
+
+  onShow() {
+    this.getCurrentVolume()
+  },
+
+  onBackPress() {
+    return true
+  },
+
+  async loadSettings() {
+    try {
+      const vibVal = await this.getStorage(STORAGE_KEYS.VIBRATION)
+      this.vibrationEnabled = (vibVal !== null) ? (vibVal === 'true') : true
+      if (vibVal === null) this.setStorage(STORAGE_KEYS.VIBRATION, 'true')
+
+      const cooldownVal = await this.getStorage(STORAGE_KEYS.NO_COOLDOWN)
+      this.noCooldownEnabled = (cooldownVal !== null) ? (cooldownVal === 'true') : false
+      if (cooldownVal === null) this.setStorage(STORAGE_KEYS.NO_COOLDOWN, 'false')
+
+      const sensVal = await this.getStorage(STORAGE_KEYS.SENSITIVITY)
+      if (sensVal !== null) {
+        const parsed = parseInt(sensVal, 10)
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 100) {
+          this.sensitivityPercent = parsed
+        } else {
+          this.sensitivityPercent = 50
+          this.setStorage(STORAGE_KEYS.SENSITIVITY, '50')
+        }
+      } else {
+        this.sensitivityPercent = 50
+        this.setStorage(STORAGE_KEYS.SENSITIVITY, '50')
+      }
+    } catch (e) {
+      console.error('加载设置失败：', e)
+      this.vibrationEnabled = true
+      this.noCooldownEnabled = false
+      this.sensitivityPercent = 50
+    }
+  },
+
+  getStorage(key) {
+    return new Promise((resolve) => {
+      storage.get({
+        key: key,
+        success: (data) => resolve(data),
+        fail: () => resolve(null)
+      })
+    })
+  },
+
+  setStorage(key, value) {
+    storage.set({ key: key, value: String(value) })
+  },
+
+  toggleVibrationImage() {
+    const newState = !this.vibrationEnabled
+    this.vibrationEnabled = newState
+    this.setStorage(STORAGE_KEYS.VIBRATION, String(newState))
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: 'short' })
+  },
+
+  toggleNoCooldownImage() {
+    const newState = !this.noCooldownEnabled
+    this.noCooldownEnabled = newState
+    this.setStorage(STORAGE_KEYS.NO_COOLDOWN, String(newState))
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: 'short' })
+  },
+
+  getCurrentVolume() {
+    if (audio && typeof audio.volume !== 'undefined') {
+      this.volumePercent = Math.round(audio.volume * 100)
+    }
+  },
+
+  // ===== 音量滑块 =====
+  onVolumeChange(e) {
+    const newVal = e.progress
+    // 立即更新显示
+    this.volumePercent = newVal
+    // 防抖：清除之前的定时器，延迟执行实际设置
+    if (this.volumeTimer) clearTimeout(this.volumeTimer)
+    this.volumeTimer = setTimeout(() => {
+      // 最终设置音量
+      audio.volume = newVal / 100
+      // 不在这里震动，避免频繁震动
+    }, 200) 
+  },
+
+  // ===== 灵敏度滑块 =====
+  onSensitivityChange(e) {
+    const newVal = e.progress
+    this.sensitivityPercent = newVal
+    if (this.sensitivityTimer) clearTimeout(this.sensitivityTimer)
+    this.sensitivityTimer = setTimeout(() => {
+      this.setStorage(STORAGE_KEYS.SENSITIVITY, newVal)
+    }, 200)
+  },
+
+  // 版本号点击
+  onVersionTap() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: 'short' })
+    const now = Date.now()
+    if (now - this.lastTapTime > 700) this.tapCount = 0
+    this.tapCount++
+    this.lastTapTime = now
+    if (this.tapCount >= 7) {
+      this.tapCount = 0
+      prompt.showToast({ message: '已进入开发者测试页面', duration: 2000 })
+      router.push({ uri: '/pages/setting/test' })
+    }
+  },
+
+  goBack() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: 'short' })
+    router.replace({ uri: '/pages/start/loading' })
+  }
+}
+</script>

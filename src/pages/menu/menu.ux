@@ -1,0 +1,222 @@
+<template>
+  <stack class="root-stack">
+    <!-- 滚动内容：添加 id 和 onscroll 事件 -->
+    <scroll id="mainScroll" class="page" scroll-y="true" bounces="true" onscroll="onScrollHandler">
+      <div class="btnbox">
+        <input class="btn" type="button" value="挥拳" onclick="gotoPage('Quantou')" />
+        <input class="btn" type="button" value="手枪" onclick="gotoPage('Shouqiang')" />
+        <input class="btn" type="button" value="AK47" onclick="gotoPage('AK47')" />
+        <input class="btn" type="button" value="AWM" onclick="gotoPage('AWM')" />
+        <input class="btn" type="button" value="霰弹枪" onclick="gotoPage('S1897')" />
+        <input class="btn" type="button" value="无畏契约" onclick="gotoPage('Val')" />
+        <input class="btn" type="button" value="激光枪" onclick="gotoPage('Jiguangqiang')" />
+        <input class="btn" type="button" value="挥剑" onclick="gotoPage('Jian')" />
+        <input class="btn" type="button" value="手榴弹" onclick="gotoPage('Shouliudan')" />
+        <input class="btn" type="button" value="CS炸弹" onclick="gotoPage('CSboom')" />
+        <input class="btn" type="button" value="磁吸炸弹" onclick="gotoPage('Cixizhadan')" />
+        <input class="btn" type="button" value="钢管" onclick="gotoPage('Gangguan')" />
+        <input class="btn" type="button" value="铁砧" onclick="gotoPage('Tiezhen')" />
+        <input class="btn" type="button" value="不死图腾" onclick="gotoPage('Busituteng')" />
+        <input class="btn" type="button" value="竹知了" onclick="gotoPage('Zhuzhiliao')" />
+        <input class="btn" type="button" value="哈基米" onclick="gotoPage('Hajimi')" />
+        <input class="btn" type="button" value="蒸蚌" onclick="gotoPage('Zhengbang')" />
+        <input class="btn" type="button" value="嘲笑猫" onclick="gotoPage('Chaoxiaomao')" />
+        <input class="btn" type="button" value="巴巴博一" onclick="gotoPage('Bababoyi')" />
+        <input class="btn" type="button" value=" 开 !" onclick="gotoPage('Kai')" />
+        <input class="btn" type="button" value="比比拉布" onclick="gotoPage('Bibilabu')" />
+        <input class="btn" type="button" value="我的刀盾" onclick="gotoPage('Daodun')" />
+        <input class="btn" type="button" value="八嘎雅鹿" onclick="gotoPage('Bagayalu')" />
+        <input class="btn" type="button" value="大狗叫叫" onclick="gotoPage('Dagoujiao')" />
+        <input class="btn" type="button" value="咕咕嘎嘎" onclick="gotoPage('Couqie')" />
+        <input class="btn" type="button" value="难道说" onclick="gotoPage('Nandaoshuo')" />
+        <input class="btn" type="button" value="Oh m god" onclick="gotoPage('Ohmg')" />
+        <input class="btn" type="button" value="曼波" onclick="gotoPage('Manbo')" />
+        <input class="btn" type="button" value="欧曼波" onclick="gotoPage('Manboa')" />
+        <input class="btn" type="button" value="阿西噶" onclick="gotoPage('Axiga')" />
+        <input class="btn" type="button" value="划过我心" onclick="gotoPage('Huaguowo')" />
+        <input class="btn" type="button" value="刺痛我心" onclick="gotoPage('Citongwoxin')" />
+        <input class="btn" type="button" value="再火一回" onclick="gotoPage('Zaihuoyihui')" />
+        <input class="btn" type="button" value="再起" onclick="gotoPage('Zaiqi')" />
+        <input class="btn" type="button" value="爱上雷神" onclick="gotoPage('Aishangleishen')" />
+        <input class="btn" type="button" value="奶蛙" onclick="gotoPage('Naiwa')" />
+        <input class="btn" type="button" value="滴辣虾" onclick="gotoPage('Gagadilaxia')" />
+        <input class="btn" type="button" value="嘎达嘎达" onclick="gotoPage('Gadagada')" />
+        <input class="btn" type="button" value="汤姆惨叫" onclick="gotoPage('Tom')" />
+        <input class="btn" type="button" value="汤姆笑" onclick="gotoPage('Tomlaugh')" />
+        <input class="btn" type="button" value="歹徒" onclick="gotoPage('Daitu')" />
+        <input class="btn" type="button" value="万象天引" onclick="gotoPage('Wanxiangtianyin')" />
+        <input class="btn" type="button" value="神罗天征" onclick="gotoPage('Shenluotianzheng')" />
+        <input class="btn" type="button" value="阿玛特拉斯" onclick="gotoPage('Amatelasi')" />
+        <input class="btn" type="button" value="魔术技巧" onclick="gotoPage('Magic')" />
+        <input class="btn" type="button" value="轻松绷住" onclick="gotoPage('Easybengzhu')" />
+        <input class="btn" type="button" value="法国赌神" onclick="gotoPage('Dushen')" />
+        <input class="btn" type="button" value="自刎归天" onclick="gotoPage('Ziwenguitian')" />
+        <input class="btn" type="button" value="遥遥领先" onclick="gotoPage('Yaoyaolingxian')" />
+        <input class="btn" type="button" value="黑手哥" onclick="gotoPage('Cao')" />
+        <input class="btn" type="button" value="雨姐" onclick="gotoPage('Yujie')" />
+        <input class="btn" type="button" value="坤坤" onclick="gotoPage('Kun')" />
+        <input class="btn" type="button" value="五字真言" onclick="gotoPage('Leijun')" />
+        <input class="btn" type="button" value="康神" onclick="gotoPage('Kangshen')" />
+        <input class="btn" type="button" value="张老师" onclick="gotoPage('Zhangxuefeng')" />
+        <input class="btn" type="button" value="Man" onclick="gotoPage('Man')" />
+        <input class="btn" type="button" value="海公牛" onclick="gotoPage('Haigongniu')" />
+        <input class="btn" type="button" value="老奶奶" onclick="gotoPage('Laonainai')" />
+        <input class="btn" type="button" value="鼻屎奶奶笑" onclick="gotoPage('Bishi')" />
+        <input class="btn" type="button" value="雷霆动物" onclick="gotoPage('Leitingdongwu')" />
+        <input class="btn" type="button" value="受伤" onclick="gotoPage('MChit')" />
+        <input class="btn" type="button" value="进食" onclick="gotoPage('MCeating')" />
+        <input class="btn" type="button" value="开箱" onclick="gotoPage('MCchest')" />
+        <input class="btn" type="button" value="击打村民" onclick="gotoPage('Villager')" />
+        <input class="btn" type="button" value="歪比巴卜" onclick="gotoPage('Waibibabu')" />
+        <input class="btn" type="button" value="异议" onclick="gotoPage('Yiyi')" />
+        <input class="btn" type="button" value="回城" onclick="gotoPage('Home')" />
+      </div>
+      <div class='btnbox'></div>
+    </scroll>
+
+    <!-- 固定返回按钮，居中 -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+    </div>
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.page {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+}
+
+.btnbox {
+  margin-top: 30px;
+  width: 100%;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+
+.btn {
+  width: 75dp;
+  height: 31dp;
+  border-radius: 18%;
+  background-color: #333333;
+  font-size: 15dp;
+  font-weight: bold;
+  color: #82d1ff;
+  text-align: center;
+  margin: 4dp;
+}
+
+/* 固定返回按钮包装器（居中） */
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  height: 32dp;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+.back-button-fixed {
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #cccccc;
+}
+
+@media (shape: rect) {
+  .btn {
+    width: 84dp;
+    height: 36dp;
+    font-size: 15dp;
+    margin: 4dp;
+  }
+}
+</style>
+
+<script>
+import router from '@system.router'
+import storage from '@system.storage'
+import vibrator from '@system.vibrator'
+
+export default {
+  private: {
+    vibrationEnabled: true
+  },
+
+  // ★ 页面就绪时恢复滚动位置
+  onReady() {
+    const that = this
+    storage.get({
+      key: 'scroll_position',
+      success: function(data) {
+        if (data) {
+          that.$nextTick(() => {
+            const scrollEl = that.$element('mainScroll')
+            if (scrollEl) {
+              scrollEl.scrollTo({
+                top: parseInt(data, 10),
+                behavior: 'instant'
+              })
+            }
+          })
+        }
+      },
+      fail: function() {
+        // 忽略
+      }
+    })
+  },
+
+  // ★ 滚动时存储当前位置
+  onScrollHandler(e) {
+    storage.set({
+      key: 'scroll_position',
+      value: String(e.scrollY)
+    })
+  },
+
+  // 返回按钮（带震动）
+  goBack() {
+    if (this.vibrationEnabled) {
+      vibrator.vibrate({ mode: 'short' })
+    }
+    router.replace({ uri: '/pages/start/loading' })
+  },
+
+  // 系统返回键拦截
+  onBackPress() {
+    router.replace({ uri: '/pages/start/loading' })
+    return true
+  },
+
+  // 公共重置方法（原逻辑）
+  resetSharedState() {
+    storage.set({ key: 'play_count', value: '0' })
+    storage.set({ key: 'is_locked', value: 'false' })
+    storage.set({ key: 'fixed_play_count', value: '0' })
+    storage.set({ key: 'group_locked', value: 'false' })
+    storage.set({ key: 'locked_group', value: '1' })
+    storage.set({ key: 'group_inner_index', value: '0' })
+  },
+
+  // ★ 通用跳转方法（替代所有单独的方法）
+  gotoPage(pageName) {
+    this.resetSharedState()
+    const targetUri = '/pages/' + pageName
+    storage.set({ key: 'lastTargetPage', value: targetUri })
+    router.replace({ uri: targetUri })
+  }
+}
+</script>

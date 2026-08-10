@@ -1,0 +1,205 @@
+<template>
+  <stack class="root-stack">
+    <!-- 滚动内容 -->
+    <scroll class="mode-page" scroll-y="true" bounces="true">
+      <!-- 原返回按钮已移除，由固定按钮替代 -->
+
+      <text class="page-title">选择手势</text>
+      <text class="hint-text" style="margin-top: 2dp;">选择正确的手势</text>
+      <text class="hint-text" style="margin-top: 0dp;margin-bottom:15dp;">有利于提升识别准确率</text>
+
+      <!-- 加载完成后再显示列表，防止闪烁 -->
+      <block if="{{ !isLoading }}">
+        <div class="mode-list">
+          <div class="mode-item {{ selected === 'punch' ? 'active' : '' }}" onclick="selectMode('punch')">
+            <text class="mode-name">左右挥拳</text>
+            <div class="check-mark" if="{{ selected === 'punch' }}"></div>
+          </div>
+
+          <div class="mode-item {{ selected === 'sword' ? 'active' : '' }}" onclick="selectMode('sword')">
+            <text class="mode-name">前后挥拳</text>
+            <div class="check-mark" if="{{ selected === 'sword' }}"></div>
+          </div>
+
+          <div class="mode-item {{ selected === 'gun' ? 'active' : '' }}" onclick="selectMode('gun')">
+            <text class="mode-name">上下挥拳</text>
+            <div class="check-mark" if="{{ selected === 'gun' }}"></div>
+          </div>
+        </div>
+
+        <text class="hint-text">当前模式：{{ modeName }}</text>
+      </block>
+    </scroll>
+
+    <!-- 固定返回按钮，居中 -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goback" />
+    </div>
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.mode-page {
+  flex: 1;
+  flex-direction: column;
+  background-color: #000000;
+  padding: 30dp 8dp 16dp 8dp; /* 顶部留出按钮空间 */
+  align-items: center;
+}
+
+/* 原 .back-button 已移除，不再使用 */
+
+.page-title {
+  font-size: 18dp;
+  color: #ffffff;
+  font-weight: bold;
+  margin-top: 12dp;
+}
+
+.mode-list {
+  width: 85%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.mode-item {
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  padding: 14dp 16dp;
+  background-color: #222222;
+  border-radius: 12dp;
+  margin-bottom: 12dp;
+  border: 2px solid transparent;
+}
+
+.mode-item.active {
+  border-color: #4ccfff;
+  background-color: #2a2a2a;
+}
+
+.mode-name {
+  font-size: 16dp;
+  color: #ffffff;
+  flex: 1;
+}
+
+.check-mark {
+  width: 21dp;
+  height: 21dp;
+  background-color: #4ccfff;
+  border-radius: 100%;
+  text-align: center;
+  line-height: 24dp;
+  color: #000000;
+  font-weight: bold;
+  font-size: 16dp;
+}
+
+.hint-text {
+  margin-top: 20dp;
+  font-size: 14dp;
+  color: #cccccc;
+}
+
+/* 固定返回按钮包装器（居中） */
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  height: 32dp;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-button-fixed {
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #cccccc;
+}
+</style>
+
+<script>
+import storage from '@system.storage'
+import router from '@system.router'
+import vibrator from '@system.vibrator'
+
+export default {
+  private: {
+    isLoading: true,      // 加载状态
+    selected: 'punch',    // 默认值，存储读取后会被覆盖
+    vibrationEnabled: true // 默认开启震动
+  },
+
+  computed: {
+    // 计算属性实时生成模式名称，无需手动更新
+    modeName() {
+      const names = {
+        punch: '左右挥拳',
+        sword: '前后挥拳',
+        gun: '上下挥拳'
+      }
+      return names[this.selected] || '未知'
+    }
+  },
+
+  onInit() {
+    this.loadSelectedMode()
+  },
+
+  loadSelectedMode() {
+    storage.get({
+      key: 'detect_mode',
+      success: (data) => {
+        if (data) {
+          this.selected = data
+        } else {
+          this.selected = 'punch'
+          this.saveMode('punch')
+        }
+        this.isLoading = false
+      },
+      fail: () => {
+        this.selected = 'punch'
+        this.saveMode('punch')
+        this.isLoading = false
+      }
+    })
+  },
+
+  saveMode(mode) {
+    storage.set({ key: 'detect_mode', value: mode })
+  },
+
+  selectMode(mode) {
+    if (this.selected === mode) return
+    this.selected = mode
+    this.saveMode(mode)
+    if (this.vibrationEnabled) {
+      vibrator.vibrate({ mode: 'short' })
+    }
+  },
+
+  onBackPress() {
+    router.replace({ uri: '/pages/start/loading' })
+    return true
+  },
+
+  goback() {
+    if (this.vibrationEnabled) {
+      vibrator.vibrate({ mode: 'short' })
+    }
+    router.replace({ uri: '/pages/start/loading' })
+  }
+}
+</script>

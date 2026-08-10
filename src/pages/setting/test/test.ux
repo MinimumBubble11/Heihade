@@ -1,0 +1,309 @@
+<template>
+  <scroll class="scroll-root" scroll-y="true" bounces="false">
+    <div class="page">
+      <!-- 标题 -->
+      <text class="title">测试</text>
+
+      <!-- 当前模式与灵敏度 -->
+      <div class="info-row">
+        <text class="label">模式：</text>
+        <text class="value">{{ modeName }}</text>
+      </div>
+      <div class="info-row">
+        <text class="label">灵敏度：</text>
+        <text class="value">{{ sensitivityPercent }}% （阈值 {{ threshold }}）</text>
+      </div>
+
+      <!-- 实时三轴加速度 -->
+      <div class="axis-group">
+        <text class="axis-label">加速度</text>
+        <div class="axis-values">
+          <text class="axis-item">X:{{ x }}，</text>
+          <text class="axis-item">Y:{{ y }}，</text>
+          <text class="axis-item">Z:{{ z }}</text>
+        </div>
+      </div>
+
+      <!-- 触发信息（触发时高亮） -->
+      <div class="trigger-group" style="{{ triggerStyle }}">
+        <text class="trigger-label">最后触发</text>
+        <text class="trigger-detail">{{ triggerInfo }}</text>
+      </div>
+      <div class="trigger-group" style="{{ triggerStyle }}">
+        <text class="trigger-count">触发次数：{{ triggerCount }}</text>
+      </div>
+      
+
+      <!-- 底部提示 -->
+      <text class="hint">查看触发数据</text>
+    </div>
+  </scroll>
+</template>
+
+<style>
+.scroll-root {
+  width: 100%;
+  height: 100%;
+  background-color: #000000;
+}
+.page {
+  width: 100%;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 16px;
+  background-color: #000000;
+}
+.title {
+  font-size: 20dp;
+  height: 30px;
+  color: #4ccfff;
+  font-weight: bold;
+}
+.info-row {
+  width: 100%;
+  height: 20px;
+  flex-direction: row;
+  justify-content: flex-start;
+}
+.label {
+  font-size: 14dp;
+  color: #aaaaaa;
+}
+.value {
+  font-size: 14dp;
+  color: #ffffff;
+  margin-left: 6dp;
+}
+.axis-group {
+  width: 100%;
+  background-color: #1a1a1a;
+  border-radius: 8px;
+  padding: 2px 2px;
+}
+.axis-label {
+  font-size: 14dp;
+  color: #4ccfff;
+  margin-bottom: 4dp;
+}
+.axis-values {
+  flex-direction: row;
+  justify-content: space-around;
+}
+.axis-item {
+  font-size: 12px;
+  color: #ffffff;
+}
+.trigger-group {
+  width: 100%;
+  background-color: #222222;
+  border-radius: 8px;
+  padding: 5px 5px;
+  margin-top: 3px;
+  margin-bottom: 3px;
+  border: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+.trigger-group.active {
+  border-color: #4ccfff;
+}
+.trigger-label {
+  font-size: 14dp;
+  color: #4ccfff;
+}
+.trigger-detail {
+  font-size: 16dp;
+  color: #ffffff;
+  margin-top: 2dp;
+}
+.trigger-count {
+  font-size: 13dp;
+  color: #aaaaaa;
+  margin-top: 2dp;
+}
+.hint {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 10dp;
+}
+</style>
+
+<script>
+import sensor from '@system.sensor'
+import storage from '@system.storage'
+import brightness from '@system.brightness'
+
+export default {
+  private: {
+    mode: 'punch',                     // 当前手势模式
+    sensitivityPercent: 50,            // 灵敏度百分比
+    threshold: 20,                     // 计算后的阈值
+    x: 0, y: 0, z: 0,                 // 实时三轴值
+    triggerAxis: '',                  // 触发的轴：'X'/'Y'/'Z'
+    triggerDirection: '',             // 方向：'正向'/'负向'/'双向'
+    triggerValue: 0,                  // 触发时的值
+    triggerCount: 0,                  // 触发总次数
+    lastAbove: false,                 // 上次是否满足条件（用于边沿检测）
+    isSubscribed: false,
+    coefficientMap: {
+    punch: 33,
+    sword: 35,
+    gun: 35
+  },
+  },
+
+  computed: {
+    // 模式中文名
+    modeName() {
+      const map = {
+        punch: '左右挥拳',
+        sword: '前后挥拳',
+        gun: '上下挥拳'
+      }
+      return map[this.mode] || '未知'
+    },
+    // 触发信息字符串
+    triggerInfo() {
+      if (!this.triggerAxis) return '等待触发……'
+      let dir = this.triggerDirection
+      if (dir === 'positive') dir = '正向'
+      else if (dir === 'negative') dir = '负向'
+      else if (dir === 'either') dir = '双向'
+      return `${this.triggerAxis}轴 ${dir} 值 ${this.triggerValue}`
+    },
+    // 触发时高亮边框样式
+    triggerStyle() {
+      return this.triggerAxis ? 'border-color: #4ccfff;' : ''
+    }
+  },
+
+  async onInit() {
+    await this.loadSettings()
+  },
+
+  onShow() {
+  this.setKeepScreenOn(true)
+  if (!this.isSubscribed) {
+    this.startAccelerometerListener()
+  }
+},
+
+onHide() {
+  this.setKeepScreenOn(false)
+  this.stopAccelerometerListener()
+},
+
+onDestroy() {
+  this.setKeepScreenOn(false)
+  this.stopAccelerometerListener()
+},
+
+  // ------------------- 加载配置 -------------------
+  async loadSettings() {
+    try {
+      // 读取模式
+      const modeVal = await this.getStorage('detect_mode')
+      if (modeVal) this.mode = modeVal
+
+      // 读取灵敏度百分比
+      const sensVal = await this.getStorage('sensitivity_percent')
+      let percent = sensVal ? parseInt(sensVal, 10) : 50
+      if (isNaN(percent) || percent < 0) percent = 0
+      if (percent > 100) percent = 100
+      this.sensitivityPercent = percent
+      this.threshold = this.calcThreshold(percent)
+    } catch (e) {
+      console.error('加载配置失败', e)
+    }
+  },
+
+  getStorage(key) {
+    return new Promise((resolve) => {
+      storage.get({
+        key,
+        success: (data) => resolve(data),
+        fail: () => resolve(null)
+      })
+    })
+  },
+  
+  //阈值计算
+  calcThreshold(percent) {
+  const coeff = this.coefficientMap[this.mode] || 35;
+  return Math.round(45 - (percent / 100) * coeff);
+},
+
+  // ------------------- 传感器 -------------------
+  startAccelerometerListener() {
+    if (this.isSubscribed) return
+    sensor.subscribeAccelerometer({
+      interval: 'game',
+      callback: (ret) => {
+        // 更新实时值
+        this.x = ret.x
+        this.y = ret.y
+        this.z = ret.z
+        // 检查触发
+        this.checkTrigger(ret.x, ret.y, ret.z)
+      },
+      fail: (err) => console.error('加速度监听失败', err)
+    })
+    this.isSubscribed = true
+  },
+
+  stopAccelerometerListener() {
+    if (this.isSubscribed) {
+      sensor.unsubscribeAccelerometer()
+      this.isSubscribed = false
+    }
+  },
+
+//屏幕常亮
+  setKeepScreenOn(keep) {
+  brightness.setKeepScreenOn({ keepScreenOn: keep })
+},
+  // ------------------- 触发判断 -------------------
+  checkTrigger(x, y, z) {
+    const { axis, direction } = this.getAxisAndDirection(this.mode)
+    const threshold = this.threshold
+
+    let value
+    switch (axis) {
+      case 'x': value = x; break
+      case 'y': value = y; break
+      case 'z': value = z; break
+      default: return
+    }
+
+    let currentAbove = false
+    if (direction === 'positive') {
+      currentAbove = value > threshold
+    } else if (direction === 'negative') {
+      currentAbove = value < -threshold
+    } else { // either
+      currentAbove = Math.abs(value) > threshold
+    }
+
+    // 边沿触发（从false变为true时记录）
+    if (currentAbove && !this.lastAbove) {
+      this.lastAbove = true
+      // 记录触发信息
+      this.triggerAxis = axis.toUpperCase()
+      this.triggerDirection = direction
+      this.triggerValue = value
+      this.triggerCount++
+    } else if (!currentAbove) {
+      this.lastAbove = false
+    }
+  },
+
+  getAxisAndDirection(mode) {
+    switch (mode) {
+      case 'punch': return { axis: 'z', direction: 'positive' }
+      case 'sword': return { axis: 'x', direction: 'either' }
+      case 'gun':   return { axis: 'y', direction: 'negative' }
+      default:      return { axis: 'z', direction: 'positive' }
+    }
+  }
+}
+</script>

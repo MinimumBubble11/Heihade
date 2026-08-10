@@ -1,0 +1,343 @@
+<template>
+  <div class="page">
+    <!-- 背景文字：绝对定位，大号居中，颜色动态渐变 -->
+    <text class="bg-text" style="color: {{ bgTextColor }};">划过我无边的心上~</text>
+    
+    <!-- 原有中心文字（保持白色，置于上层） -->
+    <div class="center-image" onclick="onImageClick">
+      <text class="center-text">划过我无边的心上~</text>
+    </div>
+    
+    <!-- 底部按钮 -->
+    <div class="button-bar">
+      <div class="btn-setting" onclick="goToModeSelect">
+        <image class="setting-icon" src="/common/images/手势.png"></image>
+      </div>
+      <div class="btn-setting" onclick="goToMenu">
+        <image class="setting-icon" src="/common/images/more.png"></image>
+      </div>
+      <div class="btn-setting" onclick="goToSetting">
+        <image class="setting-icon" src="/common/images/setting.png"></image>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+.page {
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #000000;   /* 纯黑背景，突显文字渐变 */
+  position: relative;
+  overflow: hidden;
+}
+
+/* 背景文字样式：大号、居中、置于底层 */
+.bg-text {
+  position: absolute;
+  font-size: 30px;            /* 可根据需要调整大小 */
+  text-align: center;
+  font-weight: bold;
+  color: #000000;             /* 初始黑色（与背景融合） */
+  transition: color 500ms ease; /* 颜色渐变过渡，与JS延时一致 */
+  z-index: 0;                 /* 置于底层 */
+  width: 70%;
+}
+
+/* 中心点击区域，置于上层 */
+.center-image {
+  width: 200px;
+  height: 60px;
+  justify-content: center;
+  align-items: center;
+  flex-direction: row;
+  z-index: 1;
+}
+.center-text {
+  font-size: 20px;
+  text-align: center;
+  font-weight: bold;
+  color: #ffffff;            /* 固定白色 */
+}
+
+/* 底部按钮栏 */
+.button-bar {
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: center;
+  width: 80%;
+  z-index: 1;
+  opacity: 0.85;
+}
+
+.btn-setting {
+  width: 30px;
+  height: 30px;
+  justify-content: center;
+  align-items: center;
+  background-color: #333333;
+  border-radius: 10px;
+}
+
+.setting-icon {
+  width: 20px;
+  height: 20px;
+}
+
+/* 矩形屏适配 */
+@media (shape:rect) {
+  .center-image {
+    height: 110px;
+    width: 110px;
+    margin: 15%;
+  }
+}
+</style>
+
+<script>
+import sensor from '@system.sensor'
+import audio from '@system.audio'
+import brightness from '@system.brightness'
+import vibrator from '@system.vibrator'
+import storage from '@system.storage'
+import router from '@system.router'
+
+export default {
+  private: {
+    // 动态阈值
+    threshold: 20,
+    COOLDOWN_MS: 20000,
+    lastPlayTime: 0,
+    lastAbove: false,
+    SOUND_PATH: '/common/sounds/无边的心上.mp3',
+    SOUND_DURATION: 0,
+    isPlaying: false,
+    isSubscribed: false,
+    playTimer: null,
+    vibrationEnabled: true,
+    mode: 'punch',
+    
+    // 背景文字颜色（初始黑色）
+    bgTextColor: '#000000',
+    // 用于恢复颜色的定时器
+    colorTimer: null,
+    coefficientMap: {
+    punch: 33,
+    sword: 35,
+    gun: 35
+  },
+  },
+
+  async onInit() {
+    console.info('页面初始化')
+    await this.loadSettings()
+  },
+
+  onShow() {
+    this.setKeepScreenOn(true)
+    this.loadSettings()
+    if (!this.isSubscribed) this.startAccelerometerListener()
+  },
+
+  onHide() {
+    this.setKeepScreenOn(false)
+    this.stopAccelerometerListener()
+    this.clearPlayTimer()
+    this.clearColorTimer()
+    audio.stop()
+    this.isPlaying = false
+  },
+
+  onDestroy() {
+    this.stopAccelerometerListener()
+    this.clearPlayTimer()
+    this.clearColorTimer()
+    audio.stop()
+  },
+
+  // ---------- 加载配置 ----------
+  async loadSettings() {
+    try {
+      const modeVal = await this.getStorage('detect_mode')
+      if (modeVal) this.mode = modeVal
+
+      const vibVal = await this.getStorage('vibration_enabled')
+      if (vibVal !== null) this.vibrationEnabled = (vibVal === 'true')
+
+      const sensVal = await this.getStorage('sensitivity_percent')
+      let percent = sensVal ? parseInt(sensVal, 10) : 50
+      if (isNaN(percent) || percent < 0) percent = 0
+      if (percent > 100) percent = 100
+      this.threshold = this.calcThreshold(percent)
+
+      const noCooldownVal = await this.getStorage('no_cooldown_enabled')
+      if (noCooldownVal !== null) {
+        this.noCooldownEnabled = (noCooldownVal === 'true' || noCooldownVal === true)
+      } else {
+        this.noCooldownEnabled = true
+      }
+      console.log('无冷却状态:', this.noCooldownEnabled)
+    } catch (e) {
+      console.error('加载配置失败', e)
+    }
+  },
+
+  getStorage(key) {
+    return new Promise((resolve) => {
+      storage.get({
+        key: key,
+        success: (data) => resolve(data),
+        fail: () => resolve(null)
+      })
+    })
+  },
+
+  //阈值计算
+  calcThreshold(percent) {
+  const coeff = this.coefficientMap[this.mode] || 35;
+  return Math.round(45 - (percent / 100) * coeff);
+},
+
+  getAxisAndDirection(mode) {
+    switch (mode) {
+      case 'punch':   return { axis: 'z', direction: 'positive' }
+      case 'sword':   return { axis: 'x', direction: 'either' }
+      case 'gun':     return { axis: 'y', direction: 'negative' }
+      default:        return { axis: 'z', direction: 'positive' }
+    }
+  },
+
+  // ---------- 加速度检测 ----------
+  startAccelerometerListener() {
+    if (this.isSubscribed) return
+    sensor.subscribeAccelerometer({
+      interval: 'game',
+      callback: (ret) => {
+        this.checkAccelerationTrigger(ret.x, ret.y, ret.z)
+      },
+      fail: (err) => console.error('加速度监听失败', err)
+    })
+    this.isSubscribed = true
+  },
+
+  stopAccelerometerListener() {
+    if (this.isSubscribed) {
+      sensor.unsubscribeAccelerometer()
+      this.isSubscribed = false
+    }
+  },
+
+  checkAccelerationTrigger(x, y, z) {
+    const now = Date.now();
+    if (!this.noCooldownEnabled && (now - this.lastPlayTime < this.COOLDOWN_MS)) return;
+
+    const { axis, direction } = this.getAxisAndDirection(this.mode);
+    const threshold = this.threshold;
+
+    let value;
+    switch (axis) {
+      case 'x': value = x; break;
+      case 'y': value = y; break;
+      case 'z': value = z; break;
+      default: return;
+    }
+
+    let currentAbove = false;
+    if (direction === 'positive') {
+      currentAbove = value > threshold;
+    } else if (direction === 'negative') {
+      currentAbove = value < -threshold;
+    } else {
+      currentAbove = Math.abs(value) > threshold;
+    }
+
+    if (currentAbove && !this.lastAbove) {
+      this.lastAbove = true;
+      this.lastPlayTime = now;
+      this.playSoundSequence();
+    } else if (!currentAbove) {
+      this.lastAbove = false;
+    }
+  },
+
+  // ---------- 音频播放 + 背景文字颜色渐变 ----------
+  playSoundSequence() {
+    // 振动反馈
+    if (this.vibrationEnabled) {
+      vibrator.vibrate({ mode: 'short' })
+    }
+    
+    // 打断当前播放
+    this.clearPlayTimer()
+    audio.stop()
+    this.isPlaying = true
+
+    // ----- 背景文字颜色渐变：黑 → 白 → 黑 -----
+    if (this.colorTimer) {
+      clearTimeout(this.colorTimer)
+      this.colorTimer = null
+    }
+    // 设为白色（CSS transition 使平滑过渡）
+    this.bgTextColor = '#bebebe'
+    // 延迟 300ms 后恢复黑色（与 transition 时长一致）
+    this.colorTimer = setTimeout(() => {
+      this.bgTextColor = '#000000'
+      this.colorTimer = null
+    }, 300)
+
+    // 播放音频
+    audio.src = this.SOUND_PATH
+    audio.loop = false
+    audio.play()
+
+    // 超时重置播放状态
+    this.playTimer = setTimeout(() => {
+      this.isPlaying = false
+      this.playTimer = null
+    }, this.SOUND_DURATION)
+  },
+
+  // 点击中心文字触发的播放（与摇动相同）
+  onImageClick() {
+    const now = Date.now()
+    if (!this.noCooldownEnabled && (now - this.lastPlayTime < this.COOLDOWN_MS)) return
+    this.lastPlayTime = now
+    this.playSoundSequence()
+  },
+
+  // 清理定时器
+  clearPlayTimer() {
+    if (this.playTimer) {
+      clearTimeout(this.playTimer)
+      this.playTimer = null
+    }
+  },
+
+  clearColorTimer() {
+    if (this.colorTimer) {
+      clearTimeout(this.colorTimer)
+      this.colorTimer = null
+    }
+  },
+
+  setKeepScreenOn(keep) {
+    brightness.setKeepScreenOn({ keepScreenOn: keep })
+  },
+
+  // ---------- 页面跳转 ----------
+  goToModeSelect() {
+    router.replace({ uri: '/pages/mode-select' })
+  },
+
+  goToMenu() {
+    router.replace({ uri: '/pages/menu' })
+  },
+
+  goToSetting() {
+    router.replace({ uri: '/pages/setting' })
+  }
+}
+</script>
