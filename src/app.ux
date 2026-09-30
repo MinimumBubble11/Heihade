@@ -1,10 +1,63 @@
 <script>
+import router from '@system.router'
+import interconnect from '@system.interconnect'
+import audioSync from './common/audiosync'
+import dlManager from './common/downloadmanager'
+
 export default {
   onCreate() {
-    console.log("app created")
+    this.initGlobalInterconnect()
+    // 启动全局下载管理器（后台下载：队列/进度存应用级，页面退出后继续）
+    dlManager.init()
   },
   onDestroy() {
-    console.log("app destroyed")
+    // app 销毁时无需清理全局资源（interconnect 监听由系统自动回收）
+  },
+
+  // 全局注册 interconnect 接收器：任意页面都能接收「页面跳转」指令与 audiosync 私有协议
+  initGlobalInterconnect() {
+    try {
+      const connect = interconnect.instance()
+      connect.onmessage = (data) => {
+        let raw = ''
+        if (typeof data === 'string') raw = data
+        else if (data && typeof data.data === 'string') raw = data.data
+        if (!raw) return
+        let obj = null
+        try { obj = JSON.parse(raw) } catch (e) { return }
+        if (!obj) return
+        // 通用页面跳转指令（测试页除外）
+        if (obj.type === 'heihade-nav' && obj.page) {
+          this.handleNav(obj.page)
+          return
+        }
+        // audiosync 私有协议 → 分发给同步模块
+        if (obj.type === 'audiosync') {
+          audioSync.handleMessage(raw)
+        }
+      }
+    } catch (e) {
+      console.error('init interconnect failed', e)
+    }
+    // 确保存储目录存在（幂等）
+    audioSync.init()
+    // 预热加载清单到内存缓存：后续所有页面进入直接命中缓存，
+    // 避免首屏每次 storage 全量读取 + JSON.parse
+    audioSync.load(function() {})
+  },
+
+  // 处理页面跳转指令：测试页不响应
+  handleNav(page) {
+    let curPath = ''
+    try {
+      const state = router.getState()
+      curPath = (state && (state.path || state.name)) || ''
+    } catch (e) {
+      curPath = ''
+    }
+    if (curPath.indexOf('setting/toolbox/test') >= 0) return
+    const uri = '/' + page
+    router.replace({ uri: uri, params: { ___PARAM_LAUNCH_FLAG___: 'clearTask' } })
   }
 }
 </script>

@@ -1,30 +1,42 @@
 <template>
+  <!-- 使用stack作为根容器，实现层叠布局 -->
   <stack class="root-stack">
+    <!-- 滚动内容 -->
     <scroll class="setting-page" scroll-y="true" bounces="true">
       <block if="{{ !isLoading }}">
-        <!-- 震动反馈开关 -->
+        <!-- 震动反馈开关（开启时显示短/长模式选择） -->
         <div class="section">
-          <div class="switch-container">
+          <div class="switch-container" onclick="toggleVibrationEnabled">
             <text class="switch-label">震动反馈</text>
             <image 
               class="switch-image" 
               src="{{ vibrationEnabled ? '/common/images/true.png' : '/common/images/false.png' }}"
-              onclick="toggleVibrationImage"
             />
           </div>
-          <text class="section-text">关闭后，部分操作将不会震动</text>
+          <text class="section-text">{{ vibrationModeHint }}</text>
+
+          <!-- 震动模式选择：震动开启时显示（input-radio） -->
+          <div class="vibration-mode-options" if="{{ vibrationEnabled }}">
+            <div class="mode-option" onclick="selectVibrationMode('short')">
+              <input class="mode-radio" type="radio" name="vibration-mode" value="short" checked="{{ vibrationMode === 'short' }}" onchange="onVibrationModeRadio" />
+              <text class="mode-option-label">短震</text>
+            </div>
+            <div class="mode-option" onclick="selectVibrationMode('long')">
+              <input class="mode-radio" type="radio" name="vibration-mode" value="long" checked="{{ vibrationMode === 'long' }}" onchange="onVibrationModeRadio" />
+              <text class="mode-option-label">长震</text>
+            </div>
+          </div>
         </div>
 
         <div class="separator"></div>
 
         <!-- 无冷却时间开关 -->
         <div class="section">
-          <div class="switch-container">
+          <div class="switch-container" onclick="toggleNoCooldownImage">
             <text class="switch-label">无冷却时间</text>
             <image 
               class="switch-image" 
               src="{{ noCooldownEnabled ? '/common/images/true.png' : '/common/images/false.png' }}"
-              onclick="toggleNoCooldownImage"
             />
           </div>
           <text class="section-text">开启后，音效触发无冷却时间</text>
@@ -32,55 +44,60 @@
 
         <div class="separator"></div>
 
-        <!-- 媒体音量调节（滑块 + 缩放） -->
+        <!-- 媒体音量调节 -->
         <div class="section">
           <div class="volume-header">
             <text class="volume-label">媒体音量</text>
           </div>
-          <!-- 使用 wrapper 进行整体缩放 -->
-          <div class="slider-scale-wrapper">
-            <slider 
-              class="custom-slider"
-              min="0"
-              max="100"
-              step="10"
-              value="{{ volumePercent }}"
-              onchange="onVolumeChange"
-            />
+          <div class="volume-control">
+            <div class="vol-btn" onclick="decreaseVolume" onlongpress="startVolumeRepeatDec" ontouchend="stopVolumeRepeat" ontouchcancel="stopVolumeRepeat">
+              <text class="vol-btn-text">-</text>
+            </div>
+            <progress class="volume-progress" percent="{{ volumePercent }}" type="horizontal"></progress>
+            <div class="vol-btn" onclick="increaseVolume" onlongpress="startVolumeRepeatInc" ontouchend="stopVolumeRepeat" ontouchcancel="stopVolumeRepeat">
+              <text class="vol-btn-text">+</text>
+            </div>
           </div>
           <text class="volume-percent" style="color: #4ccfff;">{{ volumePercent }}%</text>
         </div>
 
         <div class="separator"></div>
 
-        <!-- 运动检测灵敏度调节（滑块 + 缩放） -->
+        <!-- 运动检测灵敏度调节 -->
         <div class="section">
           <div class="volume-header">
             <text class="volume-label">运动检测灵敏度</text>
             <text class="tips">数值越小，动作需要越明显</text>
           </div>
-          <div class="slider-scale-wrapper">
-            <slider 
-              class="custom-slider"
-              min="0"
-              max="100"
-              step="1"
-              value="{{ sensitivityPercent }}"
-              onchange="onSensitivityChange"
-            />
+          <div class="volume-control">
+            <div class="vol-btn" onclick="decreaseSensitivity" onlongpress="startSensitivityRepeatDec" ontouchend="stopSensitivityRepeat" ontouchcancel="stopSensitivityRepeat">
+              <text class="vol-btn-text">-</text>
+            </div>
+            <progress class="volume-progress" percent="{{ sensitivityPercent }}" type="horizontal"></progress>
+            <div class="vol-btn" onclick="increaseSensitivity" onlongpress="startSensitivityRepeatInc" ontouchend="stopSensitivityRepeat" ontouchcancel="stopSensitivityRepeat">
+              <text class="vol-btn-text">+</text>
+            </div>
           </div>
           <text class="volume-percent" style="color: #4ccfff;">{{ sensitivityPercent }}%</text>
         </div>
 
+        
         <div class="separator"></div>
-
-        <!-- 赞助二维码 -->
         <div class="section">
-          <text class="section-title">赞助一下吧！</text>
-          <qrcode class="qr-code" value="https://www.ifdian.net/a/HuaShu_abc" style="color: #000;"></qrcode>
-          <div class="separator"></div>
-          <text class="section-title">扫码加入QQ群</text>
-          <qrcode class="qr-code" value="https://qm.qq.com/q/QfvpeDee4i" style="color: #000;"></qrcode>
+          <scroll class="qr-row"  scroll-x="{{true}}" bounces="true">
+            <div class="qr-item">
+              <text class="section-title">赞助一下吧！</text>
+              <qrcode class="qr-code" value="https://www.ifdian.net/a/HuaShu_abc" style="color: #000;"></qrcode>
+            </div>
+            <div class="qr-item">
+              <text class="section-title">扫码加入QQ群</text>
+              <qrcode class="qr-code" value="https://qm.qq.com/q/QfvpeDee4i" style="color: #000;"></qrcode>
+            </div>
+            <div class="qr-item">
+              <text class="section-title">音效上传</text>
+              <qrcode class="qr-code" value="https://MinimumBubble11.github.io/Heihade_index/contributor.html" style="color: #000;"></qrcode>
+            </div>
+          </scroll> 
         </div>
 
         <!-- 作者与版本号 -->
@@ -91,26 +108,31 @@
               <image class="avatar" src="/common/桦树abc.png" />
               <text class="author-name">桦树abc</text>
             </div>
-            <div class="version-info">
+            <div class="version-info"  onclick="onVersionTap">
               <text class="version-label">版本号</text>
-              <text class="version-text" style="color: #00b3ff;" onclick="onVersionTap">{{ appVersion }}</text>
+              <text class="version-text" style="color: #00b3ff;">{{ appVersion }}</text>
             </div>
           </div>
         </div>
         <div class="separator"></div>
         <text class="section-text">素材来源：自制、网络和AI生成</text>
         <text class="section-text">禁止将本应用用作商业用途</text>
-        <div class="bottom-space"></div>
+        
+      <div class="separator"></div>
+      <div class="bottom-space">
+        <text class="section-text">永远铭记便宜的</text>
+        <image class='ds-img' src='/common/images/deepseek.png'></image>
+      </div>
       </block>
 
       <block if="{{ isLoading }}">
-        <text style="color: #ffffff; font-size: 16dp; margin-top: 40dp;">加载中...</text>
+        <text style="width: 100%; text-align: center; color: #888888; font-size: 14dp; margin-top: 40dp;">加载中...</text>
       </block>
     </scroll>
-    <!-- 返回按钮 -->
-    <div class="back-wrapper">
-      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
-    </div>
+<!-- 在 </scroll> 之后，</stack> 之前添加 -->
+<div class="back-wrapper">
+  <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+</div>
   </stack>
 </template>
 
@@ -121,7 +143,7 @@
 }
 
 .setting-page {
-  margin-top: 30px;
+  padding: 30px 0;
   flex: 1;
   flex-direction: column;
   background-color: #000000;
@@ -131,92 +153,133 @@
 .tips {
   font-size: 11dp;
   color: #888888;
-  margin-top: 1dp;
+  margin-top: 2dp;
 }
 
 .switch-container {
-  width: 80%;
+  width: 85%;
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
-  padding: 5dp 8dp;
-  margin: 3dp 0;
+  padding: 6dp 8dp;
+  margin: 4dp 0;
   background-color: #222222;
-  border-radius: 10dp;
+  border-radius: 12dp;
 }
 
 .switch-label {
-  font-size: 13dp;
+  font-size: 14dp;
   color: #ffffff;
   flex: 1;
-  margin-right: 6dp;
-  line-height: 18dp;
+  margin-right: 8dp;
+  line-height: 20dp;
   font-weight: bold;
 }
 
 .switch-image {
-  width: 30dp;
+  width: 40dp;
   object-fit: contain;
 }
 
+/* 震动模式选择（input-radio） */
+.vibration-mode-options {
+  width: 85%;
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: center;
+  margin-top: 6dp;
+}
+
+.mode-option {
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  padding: 5dp 12dp;
+  background-color: #222222;
+  border-radius: 12dp;
+}
+
+.mode-radio {
+  width: 18dp;
+  height: 18dp;
+  margin: 0 2px;
+}
+
+.mode-option-label {
+  font-size: 13dp;
+  color: #ffffff;
+  margin-left: 4dp;
+}
+
 .section-text {
-  font-size: 12dp;
+  font-size: 13dp;
   color: #cccccc;
   text-align: center;
-  line-height: 16dp;
+  line-height: 18dp;
 }
 
 .separator {
   width: 100%;
   height: 1px;
   background-color: #444444;
-  margin: 2px 0;
+  margin: 3px;
 }
 
 .volume-header {
   width: 100%;
-  margin-bottom: 4dp;
+  margin-bottom: 10px;
   padding-left: 8px;
   flex-direction: column;
   align-items: flex-start;
 }
 
 .volume-label {
-  font-size: 13dp;
+  font-size: 14dp;
   color: #ffffff;
   font-weight: bold;
 }
 
-/* ===== 滑块缩放容器 ===== */
-.slider-scale-wrapper {
-  width: 320px;              
-  display: flex;
-  justify-content: center;   /* 居中 */
-  transform: scale(0.6);     /* 整体缩放为 60% */
-  transform-origin: 160px;
+.volume-control {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 95%;
 }
 
-/* 滑块本身填满 wrapper */
-.custom-slider {
-  width: 250px;
-  height: 40px;              /* 原始高度，缩放后视觉变小 */
-  padding-left: 18px;
-  padding-right: 18px;
-  color: #444444;
-  selected-color: #4ccfff;
-  block-color: #ffffff;
+.vol-btn {
+  width: 35dp;
+  height: 35dp;
+  background-color: #333333;
+  border-radius: 17.5dp;
+  justify-content: center;
+  align-items: center;
 }
 
-/* 百分比数字 */
+.vol-btn-text {
+  font-size: 22dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.volume-progress {
+  flex: 1;
+  margin: 0 6dp;
+  color: #4ccfff;
+  stroke-width: 10dp;
+  layer-color: #444444;
+}
+
 .volume-percent {
   text-align: center;
-  margin-top: -2dp;          /* 紧贴滑块 */
-  font-size: 12dp;
+  margin-top: 6dp;
+  font-size: 14dp;
 }
 
 .bottom-space {
-  height: 20px;
   width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .section {
@@ -226,28 +289,41 @@
 }
 
 .section-title {
-  font-size: 13dp;
-  margin-bottom: 3dp;
+  font-size: 14dp;
+  margin-bottom: 4dp;
   color: #ffffff;
   text-align: center;
   font-weight: bold;
 }
 
+/* 二维码并排一行 */
+.qr-row {
+  flex-direction: row;
+  width: 100%;
+}
+
+.qr-item {
+  flex-direction: column;
+  align-items: center;
+  margin: 0 3px ;
+}
+
 .qr-code {
-  width: 90dp;
-  height: 90dp;
+  width: 70dp;
+  height: 70dp;
   padding: 3dp;
   background-color: #ffffff;
   border-radius: 4px;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
 }
 
+/* 作者与版本号并列布局 */
 .author-version-row {
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 4dp 0;
+  padding: 6dp 0;
 }
 
 .author-info {
@@ -256,15 +332,15 @@
 }
 
 .avatar {
-  width: 35dp;
-  height: 35dp;
+  width: 40dp;
+  height: 40dp;
   border-radius: 100%;
-  margin-right: 5dp;
+  margin-right: 6dp;
   object-fit: cover;
 }
 
 .author-name {
-  font-size: 14dp;
+  font-size: 16dp;
   color: #ffffff;
 }
 
@@ -274,45 +350,51 @@
 }
 
 .version-label {
-  font-size: 11dp;
+  font-size: 13dp;
   color: #ffffff;
 }
 
 .version-text {
-  font-size: 14dp;
+  font-size: 16dp;
   color: #00b3ff;
 }
 
+/* 固定返回按钮 */
 .back-wrapper {
   background-color: #000000;
   position: absolute;
   width: 100%;
-  height: 32dp;
+  height: 35dp;
   flex-direction: row;
   justify-content: center;
   align-items: center;
 }
 
 .back-button-fixed {
-  width: 50dp;
-  height: 20dp;
-  border-radius: 12dp;
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
   background-color: #222222;
-  font-size: 11dp;
+  font-size: 12dp;
   color: #cccccc;
+}
+
+.ds-img{
+  width: 120px;
+  object-fit: contain;
 }
 </style>
 
 <script>
 import audio from '@system.audio'
-import storage from '@system.storage'
-import vibrator from '@system.vibrator'
 import router from '@system.router'
 import app from '@system.app'
 import prompt from '@system.prompt'
+import vibration from '../../common/vibrate'
+import backnav from '../../common/backnav'
+import settings from '../../common/settings'
 
 const STORAGE_KEYS = {
-  VIBRATION: 'vibration_enabled',
   SENSITIVITY: 'sensitivity_percent',
   NO_COOLDOWN: 'no_cooldown_enabled'
 }
@@ -320,16 +402,35 @@ const STORAGE_KEYS = {
 export default {
   private: {
     isLoading: true,
+    vibrationMode: 'short',
     vibrationEnabled: true,
+    lastVibrationMode: 'short',
     noCooldownEnabled: false,
     volumePercent: 0,
     sensitivityPercent: 50,
     appVersion: '',
+    // 长按快速调节内部状态
+    volumeRepeatTimer: null,
+    volumeRepeatDir: 1,
+    volumeLongPressed: false,
+    volumeFlagTimer: null,
+    sensitivityRepeatTimer: null,
+    sensitivityRepeatDir: 1,
+    sensitivityLongPressed: false,
+    sensitivityFlagTimer: null,
+    // 版本号连点进入测试页状态
     tapCount: 0,
-    lastTapTime: 0,
-    // 防抖定时器
-    volumeTimer: null,
-    sensitivityTimer: null
+    lastTapTime: 0
+  },
+
+  computed: {
+    // 震动开关提示文案
+    vibrationModeHint() {
+      if (!this.vibrationEnabled) {
+        return '已关闭震动，点击可开启'
+      }
+      return '开启时，可选择下方震动模式'
+    }
   },
 
   async onInit() {
@@ -340,6 +441,7 @@ export default {
       console.error('获取版本号失败：', err)
       this.appVersion = '获取失败'
     }
+
     await this.loadSettings()
     this.isLoading = false
   },
@@ -349,18 +451,31 @@ export default {
   },
 
   onBackPress() {
+    // 加载中禁止返回
+    if (this.isLoading) {
+      prompt.showToast({ message: '正在加载，请稍候', duration: 1000 })
+      return true
+    }
+    backnav.backToPlay()
     return true
   },
 
   async loadSettings() {
     try {
-      const vibVal = await this.getStorage(STORAGE_KEYS.VIBRATION)
-      this.vibrationEnabled = (vibVal !== null) ? (vibVal === 'true') : true
-      if (vibVal === null) this.setStorage(STORAGE_KEYS.VIBRATION, 'true')
+      const vibMode = await vibration.getMode()
+      this.vibrationMode = vibMode
+      this.vibrationEnabled = (vibMode !== 'off')
+      if (vibMode !== 'off') {
+        this.lastVibrationMode = vibMode
+      }
 
       const cooldownVal = await this.getStorage(STORAGE_KEYS.NO_COOLDOWN)
-      this.noCooldownEnabled = (cooldownVal !== null) ? (cooldownVal === 'true') : false
-      if (cooldownVal === null) this.setStorage(STORAGE_KEYS.NO_COOLDOWN, 'false')
+      if (cooldownVal !== null) {
+        this.noCooldownEnabled = (cooldownVal === 'true')
+      } else {
+        this.noCooldownEnabled = false
+        this.setStorage(STORAGE_KEYS.NO_COOLDOWN, 'false')
+      }
 
       const sensVal = await this.getStorage(STORAGE_KEYS.SENSITIVITY)
       if (sensVal !== null) {
@@ -377,38 +492,62 @@ export default {
       }
     } catch (e) {
       console.error('加载设置失败：', e)
+      this.vibrationMode = 'short'
       this.vibrationEnabled = true
+      this.lastVibrationMode = 'short'
       this.noCooldownEnabled = false
       this.sensitivityPercent = 50
     }
   },
 
   getStorage(key) {
-    return new Promise((resolve) => {
-      storage.get({
-        key: key,
-        success: (data) => resolve(data),
-        fail: () => resolve(null)
-      })
-    })
+    return settings.get(key)
   },
 
   setStorage(key, value) {
-    storage.set({ key: key, value: String(value) })
+    settings.set(key, value)
   },
 
-  toggleVibrationImage() {
-    const newState = !this.vibrationEnabled
-    this.vibrationEnabled = newState
-    this.setStorage(STORAGE_KEYS.VIBRATION, String(newState))
-    if (this.vibrationEnabled) vibrator.vibrate({ mode: 'short' })
+  // 震动反馈开关：开启/关闭
+  toggleVibrationEnabled() {
+    this.vibrationEnabled = !this.vibrationEnabled
+    if (this.vibrationEnabled) {
+      // 开启时恢复上次选择的短/长模式
+      this.vibrationMode = this.lastVibrationMode
+      vibration.setMode(this.vibrationMode)
+      // 按当前模式给予一次反馈
+      vibration.vibrate(this.vibrationMode)
+    } else {
+      // 关闭时模式置为 off，其余震动调用自动静默
+      this.vibrationMode = 'off'
+      vibration.setMode('off')
+    }
+  },
+
+  // 选择震动模式（input-radio）
+  selectVibrationMode(mode) {
+    if (mode !== 'short' && mode !== 'long') return
+    if (this.vibrationMode === mode) return
+    this.vibrationMode = mode
+    this.lastVibrationMode = mode
+    vibration.setMode(mode)
+    // 按新模式给予一次反馈
+    vibration.vibrate(mode)
+  },
+
+  // input-radio 的 change 事件
+  onVibrationModeRadio(e) {
+    const value = (e && e.value !== undefined)
+      ? e.value
+      : ((e && e.detail && e.detail.value) || '')
+    this.selectVibrationMode(value)
   },
 
   toggleNoCooldownImage() {
     const newState = !this.noCooldownEnabled
     this.noCooldownEnabled = newState
     this.setStorage(STORAGE_KEYS.NO_COOLDOWN, String(newState))
-    if (this.vibrationEnabled) vibrator.vibrate({ mode: 'short' })
+    vibration.vibrate(this.vibrationMode)
   },
 
   getCurrentVolume() {
@@ -417,47 +556,163 @@ export default {
     }
   },
 
-  // ===== 音量滑块 =====
-  onVolumeChange(e) {
-    const newVal = e.progress
-    // 立即更新显示
+  setVolumePercent(percent) {
+    let newVal = Math.min(100, Math.max(0, percent))
     this.volumePercent = newVal
-    // 防抖：清除之前的定时器，延迟执行实际设置
-    if (this.volumeTimer) clearTimeout(this.volumeTimer)
-    this.volumeTimer = setTimeout(() => {
-      // 最终设置音量
-      audio.volume = newVal / 100
-      // 不在这里震动，避免频繁震动
-    }, 200) 
+    audio.volume = newVal / 100
   },
 
-  // ===== 灵敏度滑块 =====
-  onSensitivityChange(e) {
-    const newVal = e.progress
+  decreaseVolume() {
+    // 长按松手后可能补发的 click，跳过以避免额外调节
+    if (this.volumeLongPressed) {
+      this.volumeLongPressed = false
+      return
+    }
+    vibration.vibrate(this.vibrationMode)
+    let newVal = this.volumePercent - 10
+    if (newVal < 0) newVal = 0
+    this.setVolumePercent(newVal)
+  },
+
+  increaseVolume() {
+    if (this.volumeLongPressed) {
+      this.volumeLongPressed = false
+      return
+    }
+    vibration.vibrate(this.vibrationMode)
+    let newVal = this.volumePercent + 10
+    if (newVal > 100) newVal = 100
+    this.setVolumePercent(newVal)
+  },
+
+  decreaseSensitivity() {
+    if (this.sensitivityLongPressed) {
+      this.sensitivityLongPressed = false
+      return
+    }
+    vibration.vibrate(this.vibrationMode)
+    let newVal = this.sensitivityPercent - 1
+    if (newVal < 0) newVal = 0
     this.sensitivityPercent = newVal
-    if (this.sensitivityTimer) clearTimeout(this.sensitivityTimer)
-    this.sensitivityTimer = setTimeout(() => {
-      this.setStorage(STORAGE_KEYS.SENSITIVITY, newVal)
+    this.setStorage(STORAGE_KEYS.SENSITIVITY, newVal)
+  },
+
+  increaseSensitivity() {
+    if (this.sensitivityLongPressed) {
+      this.sensitivityLongPressed = false
+      return
+    }
+    vibration.vibrate(this.vibrationMode)
+    let newVal = this.sensitivityPercent + 1
+    if (newVal > 100) newVal = 100
+    this.sensitivityPercent = newVal
+    this.setStorage(STORAGE_KEYS.SENSITIVITY, newVal)
+  },
+
+  // ============ 音量按钮长按快速调节 ============
+
+  startVolumeRepeatInc() {
+    this.startVolumeRepeat(1)
+  },
+
+  startVolumeRepeatDec() {
+    this.startVolumeRepeat(-1)
+  },
+
+  startVolumeRepeat(dir) {
+    this.stopVolumeRepeat()
+    this.volumeRepeatDir = dir
+    this.volumeLongPressed = true
+    this.volumeRepeatTimer = setInterval(() => {
+      this.adjustVolumeByDirection(this.volumeRepeatDir)
+    }, 50)
+  },
+
+  adjustVolumeByDirection(dir) {
+    vibration.vibrate(this.vibrationMode)
+    let newVal = this.volumePercent + dir * 10
+    newVal = Math.min(100, Math.max(0, newVal))
+    this.setVolumePercent(newVal)
+  },
+
+  stopVolumeRepeat() {
+    if (this.volumeRepeatTimer) {
+      clearInterval(this.volumeRepeatTimer)
+      this.volumeRepeatTimer = null
+    }
+    // 若无 click 补发，则延时清除标志，避免吞掉下一次点击
+    if (this.volumeFlagTimer) clearTimeout(this.volumeFlagTimer)
+    this.volumeFlagTimer = setTimeout(() => {
+      this.volumeLongPressed = false
     }, 200)
   },
 
-  // 版本号点击
-  onVersionTap() {
-    if (this.vibrationEnabled) vibrator.vibrate({ mode: 'short' })
-    const now = Date.now()
-    if (now - this.lastTapTime > 700) this.tapCount = 0
-    this.tapCount++
-    this.lastTapTime = now
-    if (this.tapCount >= 7) {
-      this.tapCount = 0
-      prompt.showToast({ message: '已进入开发者测试页面', duration: 2000 })
-      router.push({ uri: '/pages/setting/test' })
-    }
+  // ============ 灵敏度按钮长按快速调节 ============
+
+  startSensitivityRepeatInc() {
+    this.startSensitivityRepeat(1)
   },
 
+  startSensitivityRepeatDec() {
+    this.startSensitivityRepeat(-1)
+  },
+
+  startSensitivityRepeat(dir) {
+    this.stopSensitivityRepeat()
+    this.sensitivityRepeatDir = dir
+    this.sensitivityLongPressed = true
+    this.sensitivityRepeatTimer = setInterval(() => {
+      this.adjustSensitivityByDirection(this.sensitivityRepeatDir)
+    }, 30)
+  },
+
+  adjustSensitivityByDirection(dir) {
+    vibration.vibrate(this.vibrationMode)
+    let newVal = this.sensitivityPercent + dir * 5
+    newVal = Math.min(100, Math.max(0, newVal))
+    this.sensitivityPercent = newVal
+    this.setStorage(STORAGE_KEYS.SENSITIVITY, newVal)
+  },
+
+  stopSensitivityRepeat() {
+    if (this.sensitivityRepeatTimer) {
+      clearInterval(this.sensitivityRepeatTimer)
+      this.sensitivityRepeatTimer = null
+    }
+    if (this.sensitivityFlagTimer) clearTimeout(this.sensitivityFlagTimer)
+    this.sensitivityFlagTimer = setTimeout(() => {
+      this.sensitivityLongPressed = false
+    }, 200)
+  },
+  // 版本号点击事件（连续点击进入测试工具箱）
+  onVersionTap() {
+    const now = Date.now()
+    if (now - this.lastTapTime > 700) {
+      this.tapCount = 0
+    }
+
+    this.tapCount++
+    this.lastTapTime = now
+
+    // 连续点击达到 7 次时触发
+    if (this.tapCount >= 7) {
+      this.tapCount = 0 // 重置计数，避免重复触发
+
+
+      // 跳转到测试工具箱（网络下载 / 传感器检测）
+      router.push({
+        uri: '/pages/setting/toolbox'
+      })
+    }
+  },
   goBack() {
-    if (this.vibrationEnabled) vibrator.vibrate({ mode: 'short' })
-    router.replace({ uri: '/pages/start/loading' })
+    vibration.vibrate(this.vibrationMode)
+    // 加载中禁止返回
+    if (this.isLoading) {
+      prompt.showToast({ message: '正在加载，请稍候', duration: 1000 })
+      return
+    }
+    backnav.backToPlay()
   }
 }
 </script>

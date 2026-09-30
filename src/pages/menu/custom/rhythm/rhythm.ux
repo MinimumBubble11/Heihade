@@ -1,0 +1,279 @@
+<template>
+  <stack class="root-stack">
+    <scroll class="page" scroll-y="true" bounces="true">
+      <!-- 音效信息卡片 -->
+      <div class="info-card">
+        <text class="sound-name">{{ sound.name }}</text>
+        <text class="sound-meta">{{ sound.modeText }} · {{ sound.fileCount }}个文件</text>
+        <text class="sound-meta">当前节奏：{{ patternText }}</text>
+      </div>
+
+      <!-- 节奏选择区 -->
+      <text class="section-title">播放节奏</text>
+
+      <div class="pattern-item {{ selected === 'mode1' ? 'active' : '' }} {{ canMode ? '' : 'disabled' }}" onclick="selectPattern('mode1')">
+        <text class="pattern-name">模式1 (1, 2)</text>
+        <text class="pattern-desc">两个音频依次播放</text>
+      </div>
+
+      <div class="pattern-item {{ selected === 'mode2' ? 'active' : '' }} {{ canMode ? '' : 'disabled' }}" onclick="selectPattern('mode2')">
+        <text class="pattern-name">模式2 (1, 1, 1, 2)</text>
+        <text class="pattern-desc">音频1连播3次 + 音频2播放1次</text>
+      </div>
+
+      <div class="pattern-item {{ selected === 'random' ? 'active' : '' }} {{ canRandom ? '' : 'disabled' }}" onclick="selectPattern('random')">
+        <text class="pattern-name">随机播放</text>
+        <text class="pattern-desc">一轮不重复洗牌（需 ≥2 个音频）</text>
+      </div>
+
+      <text if="{{ !canMode && !canRandom }}" class="hint-text">单音频音效不支持设置节奏</text>
+
+      <!-- 保存 -->
+      <input class="save-btn" type="button" value="保存" onclick="savePattern" />
+      <div class="bottom-space"></div>
+    </scroll>
+
+    <!-- 固定返回按钮 -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+    </div>
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.page {
+  margin-top: 40px;
+  width: 100%;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+  padding: 12px 10px 36px 10px;
+}
+
+.info-card {
+  width: 94%;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin: 4px 0;
+  background-color: #222222;
+  border-radius: 12px;
+}
+
+.sound-name {
+  font-size: 16dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.sound-meta {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 3px;
+}
+
+.section-title {
+  width: 94%;
+  font-size: 14dp;
+  color: #4ccfff;
+  font-weight: bold;
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+
+.pattern-item {
+  width: 94%;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 12px 14px;
+  margin: 4px 0;
+  background-color: #222222;
+  border-radius: 12px;
+  border: 2px solid transparent;
+}
+
+.pattern-item.active {
+  border-color: #4ccfff;
+  background-color: #2a2a2a;
+}
+
+.pattern-item.disabled {
+  opacity: 0.4;
+}
+
+.pattern-name {
+  font-size: 15dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.pattern-desc {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 3px;
+}
+
+.hint-text {
+  margin-top: 12px;
+  font-size: 13dp;
+  color: #ff6b6b;
+}
+
+.save-btn {
+  width: 120dp;
+  height: 34dp;
+  border-radius: 17dp;
+  background-color: #1f3a2c;
+  color: #87e9c6;
+  font-size: 14dp;
+  font-weight: bold;
+  text-align: center;
+  margin-top: 16px;
+}
+
+.bottom-space {
+  height: 20px;
+  width: 100%;
+}
+
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-button-fixed {
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #cccccc;
+  margin: 2px;
+}
+
+@media (shape: rect) {
+  .pattern-item {
+    padding: 14px 16px;
+  }
+  .info-card {
+    padding: 14px 16px;
+  }
+}
+</style>
+
+<script>
+import router from '@system.router'
+import prompt from '@system.prompt'
+import vibrator from '@system.vibrator'
+import audioSync from '../../../../common/audiosync'
+import vibration from '../../../../common/vibrate'
+
+export default {
+  private: {
+    soundId: '',
+    sound: { name: '', modeText: '', fileCount: 0 },
+    selected: 'mode1',
+    canMode: false,
+    canRandom: false,
+    patternText: '模式1 (1,2)',
+    vibrationEnabled: true,
+    vibrationMode: 'short',
+    isSingle: false
+  },
+
+  onInit(params) {
+    this.soundId = (params && params.soundId) || ''
+    this.loadVibration()
+    this.loadSound()
+  },
+
+  loadVibration() {
+    vibration.loadSetting().then((vib) => {
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
+    })
+  },
+
+  // 读取目标音效信息与当前节奏
+  loadSound() {
+    const that = this
+    audioSync.load(function(list) {
+      const m = (list || []).find(function(x) { return x.id === that.soundId })
+      if (!m) {
+        prompt.showToast({ message: '音效不存在', duration: 1500 })
+        setTimeout(function() { router.back() }, 600)
+        return
+      }
+      const files = (m.files || []).filter(function(f) { return f.file })
+      const isSeq = (m.mode === 'sequence') && files.length > 1
+      that.isSingle = !isSeq
+      // 节奏可用性：模式1/2 需恰好 2 音频；随机需 ≥2 音频
+      that.canMode = isSeq && files.length === 2
+      that.canRandom = isSeq && files.length >= 2
+      // 当前节奏（旧数据缺字段按 mode1）
+      let pattern = 'mode1'
+      if (m.playPattern === 'mode2') pattern = 'mode2'
+      else if (m.playPattern === 'random') pattern = 'random'
+      that.selected = pattern
+      that.updatePatternText()
+      that.sound = {
+        name: m.name,
+        modeText: isSeq ? '多音频' : '单音频',
+        fileCount: files.length
+      }
+    })
+  },
+
+  updatePatternText() {
+    if (this.selected === 'mode2') this.patternText = '模式2 (1,1,1,2)'
+    else if (this.selected === 'random') this.patternText = '随机播放'
+    else this.patternText = '模式1 (1,2)'
+  },
+
+  selectPattern(pattern) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (pattern === 'mode1' || pattern === 'mode2') {
+      if (!this.canMode) return
+    } else {
+      if (!this.canRandom) return
+    }
+    this.selected = pattern
+    this.updatePatternText()
+  },
+
+  // 保存：更新清单 playPattern + 上报插件端 + 刷新列表
+  savePattern() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    const that = this
+    audioSync.setPlayPattern(this.soundId, this.selected, function(ok) {
+      if (ok) {
+        prompt.showToast({ message: '已保存', duration: 1500 })
+        setTimeout(function() { router.back() }, 600)
+      } else {
+        prompt.showToast({ message: '保存失败，请重试', duration: 1500 })
+      }
+    })
+  },
+
+  goBack() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.back()
+  },
+
+  onBackPress() {
+    router.back()
+    return true
+  }
+}
+</script>

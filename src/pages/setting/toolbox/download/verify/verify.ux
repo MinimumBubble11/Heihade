@@ -1,0 +1,293 @@
+<template>
+  <stack class="root-stack">
+    <scroll class="verify-page" scroll-y="true" bounces="true">
+      <text class="title">输入密码</text>
+      <text class="subtitle">调试用工具,用户请退出此页面</text>
+
+      <!-- 下载码输入格 -->
+      <div class="code-box">
+        <div class="code-slot" for="{{ dots }}" tid="idx">
+          <text class="code-char">{{ $item }}</text>
+        </div>
+      </div>
+
+      <text class="error-text">{{ error ? '错误，请重试' : '' }}</text>
+
+      <!-- 数字键盘 -->
+      <div class="keypad">
+        <div class="key-row">
+          <input class="key" type="button" value="1" onclick="onKey('1')" />
+          <input class="key" type="button" value="2" onclick="onKey('2')" />
+          <input class="key" type="button" value="3" onclick="onKey('3')" />
+          <input class="key" type="button" value="4" onclick="onKey('4')" />
+          <input class="key" type="button" value="5" onclick="onKey('5')" />
+        </div>
+        <div class="key-row">
+          <input class="key" type="button" value="6" onclick="onKey('6')" />
+          <input class="key" type="button" value="7" onclick="onKey('7')" />
+          <input class="key" type="button" value="8" onclick="onKey('8')" />
+          <input class="key" type="button" value="9" onclick="onKey('9')" />
+          <input class="key" type="button" value="0" onclick="onKey('0')" />
+        </div>
+        <div class="key-row">
+        </div>
+        <div class="key-row" style="width: 38%;">
+          <input class="key key-ok" type="button" value="√" onclick="onConfirm" />
+          <input class="key key-fn" type="button" value="←" onclick="onDelete" />
+        </div>
+      </div>
+
+      <div class="bottom-space"></div>
+    </scroll>
+
+    <!-- 顶部固定返回按钮 -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+    </div>
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: #000000;
+}
+
+.verify-page {
+  width: 100%;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+}
+
+.title {
+  font-size: 18dp;
+  color: #4ccfff;
+  font-weight: bold;
+  margin-bottom: 4dp;
+}
+
+.subtitle {
+  font-size: 12dp;
+  color: #888888;
+  margin-bottom: 14dp;
+}
+
+.code-box {
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.code-slot {
+  width: 26dp;
+  height: 26dp;
+  margin-left: 4dp;
+  margin-right: 4dp;
+  border-radius: 6dp;
+  background-color: #222222;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.code-char {
+  font-size: 18dp;
+  color: #ffffff;
+}
+
+.error-text {
+  height: 14dp;
+  font-size: 11dp;
+  color: #ff6b6b;
+  margin-bottom: 6dp;
+}
+
+.keypad {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.key-row {
+  width: 100%;
+  flex-direction: row;
+  justify-content: space-between;
+  margin-bottom: 8dp;
+}
+
+.key {
+  width: 32px;
+  height: 32px;
+  border-radius: 8dp;
+  background-color: #222222;
+  font-size: 16dp;
+  color: #ffffff;
+}
+
+.key-fn {
+  color: #4ccfff;
+  font-size: 15dp;
+}
+
+.key-ok {
+  background-color: #1d5c73;
+  color: #4ccfff;
+  font-size: 13dp;
+}
+
+.bottom-space {
+  width: 100%;
+  height: 30px;
+}
+
+/* 返回按钮：与项目其他页面（menu/setting/custom 等）保持一致的定位方式 */
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  height: 35dp;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-button-fixed {
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #cccccc;
+}
+
+@media (shape: circle) {
+  .verify-page { padding: 35px 10px;}
+
+  .key-row {
+  width: 83%;
+  margin-bottom: 5px;
+}
+
+.key {
+  width: 25px;
+  height: 25px;
+  border-radius: 40%;
+  background-color: #222222;
+  font-size: 13px;
+  color: #ffffff;
+}
+}
+
+/* 方屏：小边距即可 */
+@media (shape: rect) {
+  .verify-page { padding: 30px 0px;}
+}
+
+</style>
+
+<script>
+import router from '@system.router'
+import storage from '@system.storage'
+import vibrator from '@system.vibrator'
+import prompt from '@system.prompt'
+import vibration from '../../../../../common/vibrate'
+
+// 正确下载码
+const CORRECT_CODE = '911378'
+const CODE_LENGTH = 6
+
+export default {
+  private: {
+    // 振动开关与模式，onInit 从 storage 读取并覆盖
+    vibrationEnabled: true,
+    vibrationMode: 'short',
+    // 当前输入内容
+    input: '',
+    // 输入格显示内容（每个格子一个字符）
+    dots: ['', '', '', '', '', ''],
+    // 是否显示错误提示
+    error: false
+  },
+
+  onInit() {
+    this.loadSettings()
+  },
+
+  loadSettings() {
+    vibration.loadSetting().then((vib) => {
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
+    })
+  },
+
+  // 根据 input 刷新输入格
+  updateDots() {
+    const arr = []
+    for (let i = 0; i < CODE_LENGTH; i++) {
+      arr.push(this.input.charAt(i) || '')
+    }
+    this.dots = arr
+  },
+
+  // 数字键
+  onKey(digit) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.input.length >= CODE_LENGTH) return
+    this.error = false
+    this.input += digit
+    this.updateDots()
+    // 输入满 6 位时自动校验
+    if (this.input.length === CODE_LENGTH) {
+      this.checkCode()
+    }
+  },
+
+  // 删除键
+  onDelete() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.input.length <= 0) return
+    this.error = false
+    this.input = this.input.slice(0, -1)
+    this.updateDots()
+  },
+
+  // 确认键
+  onConfirm() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.input.length !== CODE_LENGTH) {
+      prompt.showToast({ message: '请输入完整密码', duration: 1500 })
+      return
+    }
+    this.checkCode()
+  },
+
+  // 校验下载码
+  checkCode() {
+    if (this.input === CORRECT_CODE) {
+      this.error = false
+      // replace 替换当前页，下载页返回时直接回到工具箱页
+      router.replace({ uri: '/pages/setting/toolbox/download' })
+    } else {
+      this.error = true
+      prompt.showToast({ message: '密码错误', duration: 1500 })
+      this.input = ''
+      this.updateDots()
+    }
+  },
+
+  // 物理返回键：返回上一页
+  onBackPress() {
+    router.back()
+    return true
+  },
+
+  goBack() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.back()
+  }
+}
+</script>

@@ -15,48 +15,78 @@
 }
 .image {
   width: 60dp;
-  object-fit: contain;
+  object-fit: cover;
+  animation-name: fade-in-out;
+  animation-duration: 1000ms;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: 1;
+}
+@keyframes fade-in-out {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
 }
 </style>
 
 <script>
 import router from '@system.router'
-import storage from '@system.storage'
 import audio from '@system.audio'
+import prompt from '@system.prompt'
+import audioSync from '../../common/audiosync'
+import settings from '../../common/settings'
 
 export default {
   onInit() {
     // 1. 播放音频
     audio.src = '/common/ms.mp3'
     audio.play()
-    
+
+    // ★ 每次打开应用后清除页面位置记录（菜单滚动位置 scroll_position）
+    //   确保重新打开应用时菜单从顶部开始，不恢复上次浏览位置
+    settings.remove('scroll_position')
+
+    // ★ 重启应用后清除菜单分区折叠状态与页码
+    //   确保重启后菜单恢复默认（两个分区收起、回到第一页）；应用运行期间不清除
+    settings.remove('menu_downloaded_collapsed')
+    settings.remove('menu_builtin_collapsed')
+    settings.remove('menu_downloaded_page')
+    settings.remove('menu_builtin_page')
+
     setTimeout(() => {
-  storage.set({ key: 'play_count', value: '0' })
-  storage.set({ key: 'is_locked', value: 'false' })
-  storage.set({ key: 'fixed_play_count', value: '0' })
-  storage.set({ key: 'group_locked', value: 'false' })
-  storage.set({ key: 'locked_group', value: '1' })
-  storage.set({ key: 'group_inner_index', value: '0' })
-  storage.delete({
-        key: 'scroll_position',
-        success: () => console.log('滚动位置已重置'),
-        fail: () => {} // 忽略失败（可能本来就没有）
-      })
-  
-  storage.get({
-    key: 'lastTargetPage',
-    success: (value) => {
-      if (value) {
-        router.replace({ uri: value })
-      } else {
-        router.replace({ uri: '/pages/Quantou' })
+      // 2. 重置共享播放状态（冷启动从头开始；last_audio_key 清空后 play 页视为首次进入）
+      settings.set('play_count', '0')
+      settings.set('is_locked', 'false')
+      settings.set('fixed_play_count', '0')
+      settings.set('last_audio_key', '')
+      settings.set('group_locked', 'false')
+      settings.set('locked_group', '1')
+      settings.set('group_inner_index', '0')
+
+      // 3. 插件同步进行中：引导到自定义音频页，查看置顶的传输进度条
+      if (audioSync.hasActiveTransfer()) {
+        router.replace({ uri: '/pages/menu/custom', params: { ___PARAM_LAUNCH_FLAG___: 'clearTask' } })
+        return
       }
-    },
-    fail: () => {
-      router.replace({ uri: '/pages/Quantou' })
-    }
-  })
-}, 300)
+
+      // 4. 跳转：优先恢复上次播放页，无记录则默认音效
+      settings.get('lastTargetPage').then((value) => {
+        // 兼容旧版本：独立页面均在 /pages/play 下，统一走此分支
+        if (value && value.indexOf('/pages/play') === 0) {
+          router.replace({ uri: value, params: { ___PARAM_LAUNCH_FLAG___: 'clearTask' } })
+        } else if (value === '/pages/menu') {
+          // 重试失败等场景会记录最后打开页面为菜单页，重启恢复时直接回菜单
+          router.replace({ uri: '/pages/start/loading', params: { target: 'menu' } })
+        } else {
+          router.replace({ uri: '/pages/play?name=Leijun', params: { ___PARAM_LAUNCH_FLAG___: 'clearTask' } })
+        }
+      })
+    }, 500)
+  },
+
+  // 启动过程禁止返回（播放启动音 + 重置状态，500ms 后自动跳转）
+  onBackPress() {
+    prompt.showToast({ message: '正在加载，请稍候', duration: 1000 })
+    return true
   }
 }
 </script>

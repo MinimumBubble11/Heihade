@@ -1,0 +1,464 @@
+<!--
+  自研拼音输入法组件（GB2312 常用字）
+
+  ✅ 接口与 NEORUAA/Vela_input_method 完全对齐，便于整体替换：
+    <import name="input-method" src="../../../components/InputMethod/InputMethod.ux"></import>
+    <input-method hide="{{hide}}" keyboardtype="QWERTY" maxlength="5"
+                  vibratemode="{{vibratemode}}" screentype="{{screentype}}"
+                  @complete="onComplete" @delete="onDelete"
+                  @key-down="onKeyDown" @visibility-change="onVisibilityChange">
+    </input-method>
+
+  属性：
+    hide        是否隐藏键盘（true 隐藏 / false 显示）
+    keyboardtype 键盘布局（QWERTY / T9，本实现仅 QWERTY）
+    maxlength    候选字默认展示数量
+    vibratemode  按键振动（"" / "short" / "long"）
+    screentype   屏幕类型（circle / rect / pill-shaped）
+
+  事件：
+    complete        { detail: { content } }  —— 选中中文候选字 / 英文 / 数字符号输出
+    delete          {}                       —— 点击删除键
+    keyDown         { detail: { content } }  —— 任意按键按下
+    visibilityChange{ detail: { visible } }  —— 键盘显示/隐藏（hide 变化）
+-->
+<template>
+  <div class="im-root" show="{{!hide}}">
+    <!-- 输入预览行：拼音缓冲 / 模式提示 -->
+    <div class="im-preview">
+      <text class="im-preview-text" if="{{cval && !numFlag}}">{{ cval }}|</text>
+      <text class="im-preview-hint" if="{{!cval && !numFlag}}">{{ lang === 'cn' ? '拼音输入' : '英文输入' }}</text>
+      <text class="im-preview-hint" if="{{numFlag}}">数字 / 符号</text>
+    </div>
+
+    <!-- 中文候选栏（拼音输入时显示） -->
+    <div class="im-candbar" if="{{lang === 'cn' && !numFlag && candidateList.length > 0}}">
+      <scroll class="im-cand-scroll" scroll-x="true">
+        <div class="im-cand-row">
+          <div class="im-cand {{ $idx === 0 ? 'active' : '' }}" for="{{candidateList}}" tid="ch" onclick="selectCandidate($item)">
+            <text class="im-cand-text">{{ $item.ch }}</text>
+          </div>
+          <div class="im-cand im-more" if="{{totalCandidates > shownCandidates}}" onclick="toggleExpand">
+            <text class="im-cand-text">{{ expanded ? '收起' : '更多' }}</text>
+          </div>
+        </div>
+      </scroll>
+    </div>
+
+    <!-- ============ 字母键盘（可左右滑动，正方形按键） ============ -->
+    <scroll class="im-board-scroll" scroll-x="true" bounces="true" if="{{!numFlag}}">
+      <div class="im-board-inner">
+      <div class="im-row">
+        <div class="im-key" onclick="onLetter('q')"><text class="im-key-text">Q</text></div>
+        <div class="im-key" onclick="onLetter('w')"><text class="im-key-text">W</text></div>
+        <div class="im-key" onclick="onLetter('e')"><text class="im-key-text">E</text></div>
+        <div class="im-key" onclick="onLetter('r')"><text class="im-key-text">R</text></div>
+        <div class="im-key" onclick="onLetter('t')"><text class="im-key-text">T</text></div>
+        <div class="im-key" onclick="onLetter('y')"><text class="im-key-text">Y</text></div>
+        <div class="im-key" onclick="onLetter('u')"><text class="im-key-text">U</text></div>
+        <div class="im-key" onclick="onLetter('i')"><text class="im-key-text">I</text></div>
+        <div class="im-key" onclick="onLetter('o')"><text class="im-key-text">O</text></div>
+        <div class="im-key" onclick="onLetter('p')"><text class="im-key-text">P</text></div>
+      </div>
+      <div class="im-row">
+        <div class="im-key-1"></div>
+        <div class="im-key" onclick="onLetter('a')"><text class="im-key-text">A</text></div>
+        <div class="im-key" onclick="onLetter('s')"><text class="im-key-text">S</text></div>
+        <div class="im-key" onclick="onLetter('d')"><text class="im-key-text">D</text></div>
+        <div class="im-key" onclick="onLetter('f')"><text class="im-key-text">F</text></div>
+        <div class="im-key" onclick="onLetter('g')"><text class="im-key-text">G</text></div>
+        <div class="im-key" onclick="onLetter('h')"><text class="im-key-text">H</text></div>
+        <div class="im-key" onclick="onLetter('j')"><text class="im-key-text">J</text></div>
+        <div class="im-key" onclick="onLetter('k')"><text class="im-key-text">K</text></div>
+        <div class="im-key" onclick="onLetter('l')"><text class="im-key-text">L</text></div>
+      </div>
+      <div class="im-row">
+        <div class="im-key-1"></div>
+        <div class="im-key-1"></div>
+        <div class="im-key im-key-fn" onclick="toggleNum"><text class="im-key-fn-text">123</text></div>
+        <div class="im-key" onclick="onLetter('z')"><text class="im-key-text">Z</text></div>
+        <div class="im-key" onclick="onLetter('x')"><text class="im-key-text">X</text></div>
+        <div class="im-key" onclick="onLetter('c')"><text class="im-key-text">C</text></div>
+        <div class="im-key" onclick="onLetter('v')"><text class="im-key-text">V</text></div>
+        <div class="im-key" onclick="onLetter('b')"><text class="im-key-text">B</text></div>
+        <div class="im-key" onclick="onLetter('n')"><text class="im-key-text">N</text></div>
+        <div class="im-key" onclick="onLetter('m')"><text class="im-key-text">M</text></div>
+        <div class="im-key im-key-fn" onclick="onDelete"><text class="im-key-fn-text">←</text></div>
+        <div class="im-key-1"></div>
+        <div class="im-key-1"></div>
+      </div>
+      <div class="im-row">
+        <div class="im-key-1"></div>
+        <div class="im-key-1"></div>
+        <div class="im-key" style="background-color:#000;"></div>
+        <div class="im-key im-key-fn" onclick="toggleLang"><text class="im-key-fn-text">{{ lang === 'cn' ? '中' : 'EN' }}</text></div>
+        <div class="im-key im-key-space" onclick="onSpace"><text class="im-key-fn-text">空格</text></div>
+        <div class="im-key-1"></div>
+        <div class="im-key-1"></div>
+      </div>
+      </div>
+    </scroll>
+
+    <!-- ============ 数字/符号键盘（可左右滑动） ============ -->
+    <scroll class="im-board-scroll" scroll-x="true" bounces="true" if="{{numFlag}}">
+      <div class="im-board-inner">
+      <div class="im-row">
+        <div class="im-key" onclick="onNum('1')"><text class="im-key-text">1</text></div>
+        <div class="im-key" onclick="onNum('2')"><text class="im-key-text">2</text></div>
+        <div class="im-key" onclick="onNum('3')"><text class="im-key-text">3</text></div>
+        <div class="im-key" onclick="onNum('4')"><text class="im-key-text">4</text></div>
+        <div class="im-key" onclick="onNum('5')"><text class="im-key-text">5</text></div>
+        <div class="im-key" onclick="onNum('6')"><text class="im-key-text">6</text></div>
+        <div class="im-key" onclick="onNum('7')"><text class="im-key-text">7</text></div>
+        <div class="im-key" onclick="onNum('8')"><text class="im-key-text">8</text></div>
+        <div class="im-key" onclick="onNum('9')"><text class="im-key-text">9</text></div>
+        <div class="im-key" onclick="onNum('0')"><text class="im-key-text">0</text></div>
+      </div>
+      <div class="im-row">
+        <div class="im-key-1"></div>
+        <div class="im-key" onclick="onNum('@')"><text class="im-key-text">@</text></div>
+        <div class="im-key" onclick="onNum('#')"><text class="im-key-text">#</text></div>
+        <div class="im-key" onclick="onNum('￥')"><text class="im-key-text">￥</text></div>
+        <div class="im-key" onclick="onNum('-')"><text class="im-key-text">-</text></div>
+        <div class="im-key" onclick="onNum('_')"><text class="im-key-text">_</text></div>
+        <div class="im-key" onclick="onNum('/')"><text class="im-key-text">/</text></div>
+        <div class="im-key" onclick="onNum('(')"><text class="im-key-text">(</text></div>
+        <div class="im-key" onclick="onNum(')')"><text class="im-key-text">)</text></div>
+        <div class="im-key" onclick="onNum(':')"><text class="im-key-text">:</text></div>
+        <div class="im-key" onclick="onNum(';')"><text class="im-key-text">;</text></div>
+      </div>
+      <div class="im-row">
+        <div class="im-key-1"></div>
+        <div class="im-key-1"></div>
+        <div class="im-key im-key-fn" onclick="toggleNum"><text class="im-key-fn-text">ABC</text></div>
+        <div class="im-key" onclick="onNum('.')"><text class="im-key-text">.</text></div>
+        <div class="im-key" onclick="onNum(',')"><text class="im-key-text">,</text></div>
+        <div class="im-key" onclick="onNum('?')"><text class="im-key-text">?</text></div>
+        <div class="im-key" onclick="onNum('!')"><text class="im-key-text">!</text></div>
+        <div class="im-key" onclick="onNum('=')"><text class="im-key-text">=</text></div>
+        <div class="im-key" onclick="onNum('%')"><text class="im-key-text">%</text></div>
+        <div class="im-key" onclick="onNum('*')"><text class="im-key-text">*</text></div>
+        <div class="im-key im-key-fn" onclick="onDelete"><text class="im-key-fn-text">←</text></div>
+      </div>
+      <div class="im-row">
+        <div class="im-key-1"></div>
+        <div class="im-key-1"></div>
+        <div class="im-key" style="background-color:#000;"></div>
+        <div class="im-key im-key-space" onclick="onSpace"><text class="im-key-fn-text">空格</text></div>
+      </div>
+      </div>
+    </scroll>
+  </div>
+</template>
+
+<style>
+.im-root {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  flex-direction: column;
+  background-color: #000000;
+}
+
+/* 输入预览行 */
+.im-preview {
+  width: 100%;
+  height: 24dp;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  background-color: #111111;
+}
+
+.im-preview-text {
+  font-size: 15dp;
+  color: #4ccfff;
+}
+
+.im-preview-hint {
+  font-size: 13dp;
+  color: #666666;
+}
+
+/* 中文候选栏 */
+.im-candbar {
+  width: 100%;
+  height: 30dp;
+  background-color: #0d0d0d;
+}
+
+.im-cand-scroll {
+  width: 100%;
+  height: 30dp;
+}
+
+.im-cand-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.im-cand {
+  min-width: 34dp;
+  height: 26dp;
+  padding-left: 8dp;
+  padding-right: 8dp;
+  justify-content: center;
+  align-items: center;
+  margin-left: 2dp;
+  margin-right: 2dp;
+  background-color: #1c1c1c;
+  border-radius: 6dp;
+  border: 2px solid transparent;
+}
+
+.im-cand.active {
+  border-color: #4ccfff;
+  background-color: #2a2a2a;
+}
+
+.im-cand-text {
+  font-size: 16dp;
+  color: #ffffff;
+}
+
+.im-more {
+  background-color: #222222;
+}
+
+/* 键盘区域：可左右滑动，正方形按键（边长 = 高度 27dp） */
+.im-board-scroll {
+  width: 100%;
+  height: 128dp;
+}
+
+.im-board-inner {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.im-row {
+  width: 100%;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  margin-top: 3dp;
+}
+
+.im-key {
+  width: 27dp;
+  height: 27dp;
+  margin-left: 2dp;
+  margin-right: 2dp;
+  border-radius: 6dp;
+  background-color: #222222;
+  justify-content: center;
+  align-items: center;
+}
+
+.im-key-1 {
+  width: 0px;
+  height: 0px;
+}
+@media (shape:circle){
+.im-key-1 {
+  width: 27dp;
+  height: 27dp;
+  margin-left: 2dp;
+  margin-right: 2dp;
+  background-color: #000;
+}
+}
+
+.im-key-text {
+  font-size: 15dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.im-key-fn {
+  background-color: #333333;
+}
+
+.im-key-fn-text {
+  font-size: 12dp;
+  color: #cccccc;
+}
+
+.im-key-space {
+  flex: 1;
+  height: 27dp;
+  margin-left: 2dp;
+  margin-right: 2dp;
+  border-radius: 6dp;
+  background-color: #333333;
+  justify-content: center;
+  align-items: center;
+}
+
+</style>
+
+<script>
+import vibrator from '@system.vibrator'
+import dic from './dic'
+
+// 展开后最多显示的候选字数量
+const EXPAND_LIMIT = 30
+
+export default {
+  props: {
+    hide: { default: true },
+    keyboardtype: { default: 'QWERTY' },
+    maxlength: { default: 5 },
+    vibratemode: { default: '' },
+    screentype: { default: 'circle' }
+  },
+
+  data: {
+    lang: 'cn',        // cn=拼音 / en=英文
+    numFlag: false,    // 数字/符号层
+    cval: '',          // 拼音缓冲
+    candidateList: [], // 当前候选 [{ch}]
+    totalCandidates: 0,
+    shownCandidates: 0,
+    expanded: false
+  },
+
+  onInit() {
+    this.refreshCandidates()
+  },
+
+  onDestroy() {
+    // 无定时器/监听需要清理
+  },
+
+  // 候选展示数量（受 maxlength 与展开状态控制）
+  getShowCap() {
+    const cap = parseInt(this.maxlength, 10)
+    const base = isNaN(cap) || cap <= 0 ? 5 : cap
+    return this.expanded ? EXPAND_LIMIT : base
+  },
+
+  // 按键振动（vibratemode 非空时）
+  vibrate() {
+    if (this.vibratemode) {
+      try {
+        vibrator.vibrate({ mode: this.vibratemode })
+      } catch (e) {
+        console.error('[input-method] 振动失败', e)
+      }
+    }
+  },
+
+  // 根据拼音缓冲刷新候选字
+  refreshCandidates() {
+    const cval = this.cval
+    const list = []
+    if (cval) {
+      const seen = {}
+      const pushChar = (ch) => {
+        if (ch && !seen[ch]) {
+          seen[ch] = true
+          list.push({ ch: ch })
+        }
+      }
+      // 精确匹配优先
+      const exact = dic.py2hz[cval]
+      if (exact) {
+        const arr = exact.split('')
+        for (let i = 0; i < arr.length; i++) pushChar(arr[i])
+      }
+      // 前缀匹配补齐
+      for (let i = 0; i < dic.syllables.length; i++) {
+        const s = dic.syllables[i]
+        if (s.length >= cval.length && s.indexOf(cval) === 0) {
+          const str = dic.py2hz[s]
+          if (str) {
+            const arr = str.split('')
+            for (let j = 0; j < arr.length; j++) pushChar(arr[j])
+          }
+        }
+      }
+    }
+    this.totalCandidates = list.length
+    const cap = this.getShowCap()
+    this.shownCandidates = Math.min(cap, list.length)
+    this.candidateList = list.slice(0, cap)
+  },
+
+  // 拼音字母键（中文模式累积拼音；英文模式直接输出字母）
+  onLetter(key) {
+    this.vibrate()
+    this.$emit('keyDown', { content: key })
+    if (this.lang === 'en') {
+      this.$emit('complete', { content: key })
+      return
+    }
+    this.cval += key
+    this.expanded = false
+    this.refreshCandidates()
+  },
+
+  // 数字/符号键：直接输出
+  onNum(key) {
+    this.vibrate()
+    this.$emit('keyDown', { content: key })
+    this.$emit('complete', { content: key })
+  },
+
+  // 选中候选字：输出并清空拼音缓冲
+  selectCandidate(item) {
+    if (!item || !item.ch) return
+    this.vibrate()
+    this.$emit('complete', { content: item.ch })
+    this.cval = ''
+    this.expanded = false
+    this.refreshCandidates()
+  },
+
+  // 删除键：优先删拼音缓冲；缓冲为空则通知父组件删除已输入字符
+  onDelete() {
+    this.vibrate()
+    if (this.lang === 'cn' && this.cval.length > 0) {
+      this.cval = this.cval.slice(0, -1)
+      this.expanded = false
+      this.refreshCandidates()
+      return
+    }
+    this.$emit('delete', {})
+  },
+
+  // 空格键：中文模式有候选时选中首候选，否则输出空格
+  onSpace() {
+    this.vibrate()
+    if (this.lang === 'cn' && this.candidateList.length > 0) {
+      this.selectCandidate(this.candidateList[0])
+      return
+    }
+    this.$emit('complete', { content: ' ' })
+  },
+
+  // 切换 数字/符号 层
+  toggleNum() {
+    this.vibrate()
+    this.numFlag = !this.numFlag
+    this.cval = ''
+    this.refreshCandidates()
+  },
+
+  // 切换 中文/英文
+  toggleLang() {
+    this.vibrate()
+    this.lang = this.lang === 'cn' ? 'en' : 'cn'
+    this.cval = ''
+    this.refreshCandidates()
+  },
+
+  // 展开/收起候选字
+  toggleExpand() {
+    this.vibrate()
+    this.expanded = !this.expanded
+    this.refreshCandidates()
+  }
+}
+</script>

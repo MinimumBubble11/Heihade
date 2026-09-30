@@ -1,6 +1,6 @@
 <script>
 import sensor from '@system.sensor'
-import storage from '@system.storage'
+import settings from '../common/settings'
 
 export default {
   props: {
@@ -28,30 +28,19 @@ export default {
 
   methods: {
     loadConfigAndSubscribe() {
-      storage.get({
-        key: 'detect_mode',
-        success: (data) => {
-          this.mode = data || 'punch'
-          this.loadSensitivity()
-        },
-        fail: () => this.loadSensitivity()
+      settings.get('detect_mode').then((data) => {
+        this.mode = data || 'punch'
+        this.loadSensitivity()
       })
     },
 
     loadSensitivity() {
-      storage.get({
-        key: 'sensitivity_percent',
-        success: (sensData) => {
-          let percent = sensData ? parseInt(sensData, 10) : 50
-          if (isNaN(percent) || percent < 0) percent = 0
-          if (percent > 100) percent = 100
-          this.threshold = this.calcThreshold(percent)
-          this.subscribeAccelerometer()
-        },
-        fail: () => {
-          this.threshold = this.calcThreshold(50)
-          this.subscribeAccelerometer()
-        }
+      settings.get('sensitivity_percent').then((sensData) => {
+        let percent = sensData ? parseInt(sensData, 10) : 50
+        if (isNaN(percent) || percent < 0) percent = 0
+        if (percent > 100) percent = 100
+        this.threshold = this.calcThreshold(percent)
+        this.subscribeAccelerometer()
       })
     },
 

@@ -1,0 +1,328 @@
+<template>
+  <div if="{{ visible }}" class="to-bar {{ isSync ? 'to-bar-sync' : 'to-bar-download' }}">
+    <text class="{{ isSync ? 'to-text-sync' : 'to-text-download' }}">{{ isSync ? '正在同步' : '正在下载' }}「{{ name }}」 {{ percent }}%</text>
+    <progress class="{{ isSync ? 'to-progress-sync' : 'to-progress-download' }}" percent="{{ percent }}" type="horizontal"></progress>
+
+    <div if="{{ !isSync && queue.length > 0 }}" class="to-queue-box">
+      <div class="to-queue-header" onclick="onQueueToggle">
+        <text class="to-queue-title">待下载({{ queue.length }}/3)</text>
+        <text class="to-queue-arrow">{{ queueCollapsed ? '→' : '↓' }}</text>
+      </div>
+      <div if="{{ !queueCollapsed }}" class="to-queue-list">
+        <div class="to-queue-item" for="{{ queue }}" tid="id" onclick="onQueueRemove($idx)">
+          <text class="to-queue-name">{{ $item.name }}</text>
+          <text class="to-queue-remove">✕</text>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+/* ===== 卡片本体（共同） ===== */
+.to-bar {
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ===== 下载变体 ===== */
+.to-bar-download {
+  width: 85%;
+  padding: 12px 14px;
+  background-color: #1a1a1a;
+  border-radius: 12px;
+}
+
+.to-text-download {
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #4ccfff;
+}
+
+.to-progress-download {
+  width: 90%;
+  color: #4ccfff;
+  stroke-width: 8dp;
+  layer-color: #444444;
+}
+
+/* ===== 同步变体 ===== */
+.to-bar-sync {
+  width: 92%;
+  padding: 6px 10px;
+  background-color: #222222;
+  border-radius: 10px;
+}
+
+.to-text-sync {
+  margin-bottom: 4px;
+  font-size: 13dp;
+  color: #4ccfff;
+}
+
+.to-progress-sync {
+  width: 100%;
+  height: 6dp;
+  color: #4ccfff;
+  stroke-width: 5dp;
+  layer-color: #444444;
+}
+
+/* ===== 队列区（仅下载源） ===== */
+.to-queue-box {
+  width: 90%;
+  flex-direction: column;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 2px solid #333333;
+}
+
+.to-queue-header {
+  width: 100%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.to-queue-title {
+  font-size: 11dp;
+  color: #999999;
+}
+
+.to-queue-arrow {
+  font-size: 11dp;
+  color: #4ccfff;
+}
+
+.to-queue-list {
+  width: 100%;
+  flex-direction: column;
+}
+
+.to-queue-item {
+  width: 100%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 2px;
+}
+
+.to-queue-name {
+  flex: 1;
+  font-size: 11dp;
+  color: #cccccc;
+}
+
+.to-queue-remove {
+  margin-left: 6px;
+  font-size: 12dp;
+  color: #ff6b6b;
+}
+
+/* ===== 圆屏适配：下载浮层整体缩至 70%（取整），同步变体保持原尺寸 ===== */
+@media (shape: circle) {
+  .to-bar-download {
+    width: 60%;
+    padding: 8px 10px;
+    border-radius: 8px;
+  }
+
+  .to-text-download {
+    margin-bottom: 1px;
+    font-size: 10px;
+  }
+
+  .to-progress-download {
+    width: 63%;
+    stroke-width: 6dp;
+  }
+
+  .to-queue-box {
+    width: 70%;
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid #333333;
+  }
+
+  .to-queue-title {
+    font-size: 8dp;
+  }
+
+  .to-queue-arrow {
+    font-size: 8dp;
+  }
+
+  .to-queue-item {
+    padding: 3px 1px;
+  }
+
+  .to-queue-name {
+    font-size: 8dp;
+  }
+
+  .to-queue-remove {
+    margin-left: 4px;
+    font-size: 8dp;
+  }
+}
+</style>
+
+<script>
+import dlManager from '../common/downloadmanager'
+import audioSync from '../common/audiosync'
+import vibration from '../common/vibrate'
+
+const DEFAULT_NAME = '音效'
+const SYNC_UNNAMED = '未命名音效'
+
+export default {
+  props: {
+    source: { default: 'download' }    // 'download' | 'sync'
+  },
+
+  data: {
+    isSync: false,
+    visible: false,
+    name: '',
+    percent: 0,
+    queue: [],
+    queueCollapsed: true
+  },
+
+  onInit() {
+    this.isSync = this.source === 'sync'
+    // 私有字段（非 UI 数据，不入 data）
+    this._unbind = null
+    this._wasActive = false
+    this._lastFinished = undefined
+    this._lastName = ''
+    this._lastPercent = -1
+    this._vibMode = ''
+    this._loadVibration()
+    if (this.isSync) this._bindSync()
+    else this._bindDownload()
+  },
+
+  onDestroy() {
+    if (!this._unbind) return
+    const fn = this._unbind
+    this._unbind = null
+    try { fn() } catch (e) { console.error('[overlay] 订阅注销失败', e) }
+  },
+
+  // ================= 源：下载（COS / GitHub 三级回退均透明） =================
+  _bindDownload() {
+    const that = this
+    try {
+      this._unbind = dlManager.onState(function(st) { that._applyDownload(st) })
+      // onState 不会立即回调，必须手工取首帧
+      this._applyDownload(dlManager.getState())
+    } catch (e) {
+      console.error('[overlay] 下载订阅绑定失败', e)
+    }
+  },
+
+  _applyDownload(st) {
+    try {
+      if (!st) {
+        this.visible = false
+        return
+      }
+      const active = !!(st.active || st.current)
+      this._write(active, st.current || (active ? DEFAULT_NAME : ''), st.percent || 0)
+      // queue 必须整体替换（dlManager 原地 splice，同引用不触发更新）
+      this.queue = Array.isArray(st.queue) ? st.queue.slice() : []
+      if (active && !this._wasActive) this.queueCollapsed = true
+      // 每完成一个音效（成功/失败）就通知页面刷新「已下载」标记（未下载 → 已下载），
+      // 而非等到整个队列结束；末项完成时 finishedCount 同样递增，一并覆盖
+      const finished = st.finishedCount || 0
+      if (this._lastFinished === undefined) {
+        this._lastFinished = finished
+      } else if (finished !== this._lastFinished) {
+        this._lastFinished = finished
+        this.$emit('downloadEnd', {})
+      }
+      this._wasActive = active
+    } catch (e) {
+      console.error('[overlay] 下载状态映射失败', e)
+    }
+  },
+
+  // ================= 源：同步 =================
+  _bindSync() {
+    const that = this
+    try {
+      this._unbind = audioSync.subscribe(function() { that._applySync() })
+      // subscribe 会立即回调一次，此处再显式调用一次保证首帧
+      this._applySync()
+    } catch (e) {
+      console.error('[overlay] 同步订阅绑定失败', e)
+      this.visible = false
+    }
+  },
+
+  _applySync() {
+    try {
+      const trans = audioSync.getTransfers()
+      const keys = trans ? Object.keys(trans) : []
+      if (keys.length === 0) {
+        this.visible = false
+        return
+      }
+      const t = trans[keys[0]] || {}
+      const total = t.totalChunks || 0
+      const done = t.doneChunks || 0
+      const percent = total > 0 ? (done / total) * 100 : 0
+      this._write(true, t.name || SYNC_UNNAMED, percent)
+    } catch (e) {
+      console.error('[overlay] 同步状态读取失败', e)
+      this.visible = false
+    }
+  },
+
+  // ================= 公共：写入 data（带降噪） =================
+  _write(visible, name, percent) {
+    if (this.visible !== visible) this.visible = visible
+    if (!visible) return
+    const p = this._clamp(percent)
+    if (this._lastName !== name) {
+      this.name = name
+      this._lastName = name
+    }
+    if (this._lastPercent !== p) {
+      this.percent = p
+      this._lastPercent = p
+    }
+  },
+
+  _clamp(v) {
+    const n = Math.round(Number(v))
+    if (isNaN(n) || n < 0) return 0
+    if (n > 100) return 100
+    return n
+  },
+
+  // ================= 交互 =================
+  onQueueToggle() {
+    this._vibrate()
+    this.queueCollapsed = !this.queueCollapsed
+  },
+
+  onQueueRemove(idx) {
+    this._vibrate()
+    dlManager.remove(idx)
+  },
+
+  _loadVibration() {
+    const that = this
+    vibration.loadSetting().then(function(vib) {
+      that._vibMode = vib && vib.enabled ? vib.mode : ''
+    })
+  },
+
+  _vibrate() {
+    if (!this._vibMode) return
+    try { vibration.vibrate(this._vibMode) } catch (e) { console.error('[overlay] 振动失败', e) }
+  }
+}
+</script>

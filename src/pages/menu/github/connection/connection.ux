@@ -1,0 +1,876 @@
+<template>
+  <!-- 根容器：stack 实现层叠布局，承载底部固定返回按钮 -->
+  <stack class="root-stack">
+    <!-- 滚动内容（双形态安全区由媒体查询控制） -->
+    <scroll class="connection-page" scroll-y="true" bounces="true">
+      <text class="title">网络连接测试</text>
+      <text class="subtitle">选择下载使用的连接方式</text>
+
+      <!-- 连接方式选择 -->
+      <text class="section-title">连接方式</text>
+      <div class="option-item" onclick="selectMode('domain')">
+        <div class="option-info">
+          <text class="option-name">域名直连</text>
+          <text class="option-desc">github.io 直连，兼容性最好</text>
+        </div>
+        <text class="option-check {{ connectionMode === 'domain' ? 'checked' : '' }}">{{ connectionMode === 'domain' ? '✓' : '' }}</text>
+      </div>
+      <div class="option-item" onclick="selectMode('cdn')">
+        <div class="option-info">
+          <text class="option-name">镜像网站</text>
+          <text class="option-desc">jsdelivr CDN，全球加速</text>
+        </div>
+        <text class="option-check {{ connectionMode === 'cdn' ? 'checked' : '' }}">{{ connectionMode === 'cdn' ? '✓' : '' }}</text>
+      </div>
+      <div class="option-item" onclick="selectMode('ip')">
+        <div class="option-info">
+          <text class="option-name">IP 直连</text>
+          <text class="option-desc">绕过 DNS 污染</text>
+        </div>
+        <text class="option-check {{ connectionMode === 'ip' ? 'checked' : '' }}">{{ connectionMode === 'ip' ? '✓' : '' }}</text>
+      </div>
+
+      <!-- IP 直连设置（仅 IP 直连时显示） -->
+      <div if="{{ showIpSettings }}" class="ip-settings">
+        <text class="section-title">IP 直连设置</text>
+        <div class="ip-field" onclick="editIp">
+          <text class="ip-label">IP 地址</text>
+          <div class="ip-value-row">
+            <text class="ip-value">{{ customIp }}</text>
+            <text class="ip-edit-hint">点击编辑</text>
+          </div>
+        </div>
+        <div class="switch-container" onclick="toggleHostHeader">
+          <text class="switch-label">自动添加 Host 头</text>
+          <image class="switch-image" src="{{ addHostHeader ? '/common/images/true.png' : '/common/images/false.png' }}" />
+        </div>
+        <text class="ip-error" if="{{ ipError }}">{{ ipError }}</text>
+      </div>
+
+      <!-- 高级设置 -->
+      <text class="section-title" style="margin-top: 16dp;">高级设置</text>
+      <div class="switch-container full-width" onclick="toggleAutoSwitch">
+        <div class="switch-info">
+          <text class="switch-label">自动切换</text>
+          <text class="switch-desc">首选方式失败时自动尝试下一种方式</text>
+        </div>
+        <image class="switch-image" src="{{ autoSwitch ? '/common/images/true.png' : '/common/images/false.png' }}" />
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="btn-group">
+        <input class="action-btn" type="button" value="{{ testing ? '测试中...' : '测试连接' }}" onclick="testConnection" />
+        <input class="action-btn secondary" type="button" value="恢复默认" onclick="resetToDefault" />
+      </div>
+
+      <!-- 状态区 -->
+      <div class="status-bar">
+        <text class="status-text {{ testResultClass }}" if="{{ testResult }}">{{ testResult }}</text>
+        <text class="status-hint">当前方式：{{ modeName }}</text>
+      </div>
+
+      <div class="bottom-space"></div>
+    </scroll>
+
+    <!-- 固定返回按钮 -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+    </div>
+
+    <!-- IP 输入弹窗 -->
+    <div if="{{ showIpDialog }}" class="ip-dialog-overlay">
+      <div class="ip-dialog">
+        <text class="ip-dialog-title">编辑 IP 地址</text>
+        
+        <!-- IP 输入格 -->
+        <div class="ip-display">
+          <div class="ip-group">
+            <div class="ip-digit-box" for="{{ ipDigits[0] }}" tid="idx">
+              <text class="ip-digit">{{ $item }}</text>
+            </div>
+            <text class="ip-dot">.</text>
+            <div class="ip-digit-box" for="{{ ipDigits[1] }}" tid="idx">
+              <text class="ip-digit">{{ $item }}</text>
+            </div>
+            <text class="ip-dot">.</text>
+            <div class="ip-digit-box" for="{{ ipDigits[2] }}" tid="idx">
+              <text class="ip-digit" >{{ $item }}</text>
+            </div>
+            <text class="ip-dot">.</text>
+            <div class="ip-digit-box" for="{{ ipDigits[3] }}" tid="idx">
+              <text class="ip-digit">{{ $item }}</text>
+            </div>
+          </div>
+        </div>
+        
+        <text class="ip-error" if="{{ ipError }}">{{ ipError }}</text>
+        
+        <!-- 数字键盘 -->
+        <div class="keypad">
+          <div class="key-row">
+            <input class="key" type="button" value="1" onclick="onIpKey('1')" />
+            <input class="key" type="button" value="2" onclick="onIpKey('2')" />
+            <input class="key" type="button" value="3" onclick="onIpKey('3')" />
+            <input class="key" type="button" value="4" onclick="onIpKey('4')" />
+            <input class="key" type="button" value="5" onclick="onIpKey('5')" />
+          </div>
+          <div class="key-row">
+            <input class="key" type="button" value="6" onclick="onIpKey('6')" />
+            <input class="key" type="button" value="7" onclick="onIpKey('7')" />
+            <input class="key" type="button" value="8" onclick="onIpKey('8')" />
+            <input class="key" type="button" value="9" onclick="onIpKey('9')" />
+            <input class="key" type="button" value="0" onclick="onIpKey('0')" />
+          </div>
+          <div class="key-row">
+            <input class="key key-dot" type="button" value="." onclick="onIpKey('.')" />
+            <input class="key key-del" type="button" value="←" onclick="onIpDelete" />
+            <input class="key key-cancel" type="button" value="取消" onclick="cancelIpEdit" />
+            <input class="key key-ok" type="button" value="确定" onclick="confirmIpEdit" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: #000000;
+}
+
+.connection-page {
+  width: 100%;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+  margin-top: 8px;
+}
+
+/* 圆屏：上下 10% + 左右 7-8% 安全区，避免圆角裁切 */
+@media (shape: circle) {
+  .connection-page { padding: 35px 12px }
+}
+
+/* 方屏：小边距即可 */
+@media (shape: rect) {
+  .connection-page { padding: 30px 8px }
+}
+
+.title {
+  font-size: 18dp;
+  color: #4ccfff;
+  font-weight: bold;
+  margin-bottom: 4dp;
+}
+
+.subtitle {
+  font-size: 12dp;
+  color: #888888;
+  margin-bottom: 14dp;
+}
+
+.section-title {
+  width: 92%;
+  font-size: 14dp;
+  color: #4ccfff;
+  font-weight: bold;
+  margin-top: 12dp;
+  margin-bottom: 6dp;
+}
+
+/* 连接方式选项 */
+.option-item {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  padding-right: 14px;
+  padding-bottom: 12px;
+  padding-left: 14px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+  background-color: #222222;
+  border-radius: 12px;
+}
+
+.option-info {
+  flex-direction: column;
+  flex: 1;
+}
+
+.option-name {
+  font-size: 16dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.option-desc {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 3dp;
+}
+
+.option-check {
+  font-size: 18dp;
+  color: #333333;
+  margin-left: 8dp;
+}
+
+.option-check.checked {
+  color: #4ccfff;
+}
+
+/* IP 直连设置区域 */
+.ip-settings {
+  width: 92%;
+  flex-direction: column;
+  align-items: flex-start;
+  background-color: #1a1a1a;
+  border-radius: 12px;
+  padding-top: 6px;
+  padding-right: 14px;
+  padding-bottom: 12px;
+  padding-left: 14px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.ip-field {
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+.ip-label {
+  font-size: 13dp;
+  color: #cccccc;
+  margin-bottom: 6dp;
+}
+
+.ip-value-row {
+  width: 100%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  height: 38dp;
+  border-radius: 8dp;
+  background-color: #2a2a2a;
+  padding-left: 12dp;
+  padding-right: 12dp;
+}
+
+.ip-value {
+  font-size: 14dp;
+  color: #4ccfff;
+  flex: 1;
+}
+
+.ip-edit-hint {
+  font-size: 11dp;
+  color: #666666;
+}
+
+/* 选项描述 */
+.switch-info {
+  flex-direction: column;
+  flex: 1;
+}
+
+.switch-desc {
+  font-size: 11dp;
+  color: #888888;
+  margin-top: 2dp;
+}
+
+.full-width {
+  width: 92%;
+  background-color: #222222;
+  border-radius: 12px;
+  padding-top: 12px;
+  padding-right: 14px;
+  padding-bottom: 12px;
+  padding-left: 14px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+/* IP 输入弹窗 */
+.ip-dialog-overlay {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.85);
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.ip-dialog {
+  width: 90%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #1a1a1a;
+  border-radius: 16px;
+  padding-top: 16dp;
+  padding-bottom: 16dp;
+}
+
+.ip-dialog-title {
+  font-size: 16dp;
+  color: #4ccfff;
+  font-weight: bold;
+  margin-bottom: 12dp;
+}
+
+/* IP 显示区域 */
+.ip-display {
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 10dp;
+}
+
+.ip-group {
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.ip-digit-box {
+  width: 8px;
+  height: 20px;
+  border-radius: 6dp;
+  background-color: #2a2a2a;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.ip-digit {
+  font-size: 10px;
+  color: #ffffff;
+}
+
+.ip-dot {
+  font-size: 22dp;
+  color: #4ccfff;
+  margin-left: 4dp;
+  margin-right: 4dp;
+}
+
+/* 键盘 */
+.keypad {
+  width: 90%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.key-row {
+  width: 100%;
+  flex-direction: row;
+  justify-content: space-between;
+  margin-bottom: 6dp;
+}
+
+.key {
+  width: 30px;
+  height: 30px;
+  border-radius: 8dp;
+  background-color: #222222;
+  font-size: 15dp;
+  color: #ffffff;
+}
+
+.key-dot {
+  color: #4ccfff;
+}
+
+.key-del {
+  color: #4ccfff;
+}
+
+.key-cancel {
+  width: 40px;
+  background-color: #333333;
+  color: #888888;
+  font-size: 12dp;
+}
+
+.key-ok {
+  width: 40px;
+  background-color: #1d5c73;
+  color: #4ccfff;
+  font-size: 12dp;
+}
+
+@media (shape: circle) {
+  .ip-dialog { padding: 20dp; }
+  .key-row { width: 85%; margin-bottom: 5px; }
+  .key { width: 26px; height: 26px; border-radius: 40%; font-size: 13px; }
+  .key-cancel, .key-ok { width: 36px; font-size: 11dp; }
+}
+
+@media (shape: rect) {
+  .ip-dialog { padding: 12dp; }
+}
+
+.ip-error {
+  font-size: 12dp;
+  color: #f44336;
+  margin-top: 4dp;
+}
+
+/* Host 头开关 */
+.switch-container {
+  width: 100%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6dp;
+  padding-top: 8dp;
+  padding-bottom: 8dp;
+}
+
+.switch-label {
+  font-size: 14dp;
+  color: #ffffff;
+}
+
+.switch-image {
+  width: 40dp;
+  height: 24dp;
+}
+
+/* 操作按钮 */
+.btn-group {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  margin-top: 14dp;
+  margin-bottom: 8dp;
+}
+
+.action-btn {
+  flex: 1;
+  height: 36dp;
+  border-radius: 18dp;
+  background-color: #4ccfff;
+  color: #000000;
+  font-size: 14dp;
+  font-weight: bold;
+  margin-right: 6dp;
+}
+
+.action-btn.secondary {
+  background-color: #222222;
+  color: #cccccc;
+  margin-right: 0dp;
+  margin-left: 6dp;
+}
+
+/* 状态区 */
+.status-bar {
+  width: 92%;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 10dp;
+}
+
+.status-text {
+  font-size: 14dp;
+  color: #ffffff;
+  margin-bottom: 4dp;
+}
+
+.status-text.success {
+  color: #4caf50;
+}
+
+.status-text.error {
+  color: #f44336;
+}
+
+.status-hint {
+  font-size: 12dp;
+  color: #888888;
+}
+
+.bottom-space {
+  width: 100%;
+  height: 30px;
+}
+
+/* 返回按钮：与项目其他页面保持一致的定位方式，
+   position:absolute 不设 top/bottom，固定悬浮在顶部 */
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  height: 35dp;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-button-fixed {
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #cccccc;
+}
+</style>
+
+<script>
+import router from '@system.router'
+import storage from '@system.storage'
+import vibrator from '@system.vibrator'
+import prompt from '@system.prompt'
+import fetch from '@system.fetch'
+import vibration from '../../../../common/vibrate'
+import downloadModule from '../../../../common/download'
+
+// 连接方式配置
+const CONNECTION_MODES = {
+  domain: { name: '域名直连' },
+  cdn: { name: '镜像网站' },
+  ip: { name: 'IP 直连' }
+}
+
+// 默认值
+const DEFAULT_MODE = 'domain'
+const DEFAULT_IP = '185.199.111.153'
+const SETTINGS_KEY = 'connection_settings'
+const AUTO_SWITCH_DEFAULT = true
+
+export default {
+  private: {
+    vibrationEnabled: true,
+    vibrationMode: 'short',
+    connectionMode: DEFAULT_MODE,
+    customIp: DEFAULT_IP,
+    addHostHeader: true,
+    autoSwitch: AUTO_SWITCH_DEFAULT,
+    showIpSettings: false,
+    testing: false,
+    testResult: '',
+    testResultClass: '',
+    ipError: '',
+    modeName: CONNECTION_MODES[DEFAULT_MODE].name,
+    // IP 输入弹窗
+    showIpDialog: false,
+    ipInput: '',
+    ipDigits: [[], [], [], []]
+  },
+
+  onInit() {
+    vibration.loadSetting().then((vib) => {
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
+    })
+    this.loadSettings()
+  },
+
+  // 物理返回键：返回上一页
+  onBackPress() {
+    router.back()
+    return true
+  },
+
+  goBack() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.back()
+  },
+
+  // ============ 设置读写 ============
+
+  // 从本地存储加载连接设置
+  loadSettings() {
+    const that = this
+    storage.get({
+      key: SETTINGS_KEY,
+      success: (data) => {
+        if (data) {
+          try {
+            const settings = JSON.parse(data)
+            that.connectionMode = settings.mode || DEFAULT_MODE
+            that.customIp = settings.customIp || DEFAULT_IP
+            that.addHostHeader = settings.addHostHeader !== false
+            that.autoSwitch = settings.autoSwitch !== false
+            console.log('[connection] 加载设置:', that.connectionMode)
+          } catch (e) {
+            console.error('[connection] 解析设置失败', e)
+          }
+        }
+        that.showIpSettings = (that.connectionMode === 'ip')
+        that.updateModeName()
+      },
+      fail: (err) => {
+        console.error('[connection] 读取设置失败', err)
+        that.showIpSettings = (that.connectionMode === 'ip')
+        that.updateModeName()
+      }
+    })
+  },
+
+  // 保存设置到本地存储（并即时同步到下载模块，切换后立即生效）
+  saveSettings() {
+    const settings = {
+      mode: this.connectionMode,
+      customIp: this.customIp,
+      addHostHeader: this.addHostHeader,
+      autoSwitch: this.autoSwitch
+    }
+    // 同步更新 download 模块内存缓存，避免因模块级缓存未刷新导致切换不生效
+    downloadModule.syncUserSettings(settings)
+    storage.set({
+      key: SETTINGS_KEY,
+      value: JSON.stringify(settings),
+      success: () => {
+        console.log('[connection] 设置已保存:', settings.mode)
+      },
+      fail: (err) => {
+        console.error('[connection] 保存设置失败', err)
+        prompt.showToast({ message: '设置保存失败' })
+      }
+    })
+  },
+
+  // ============ 连接方式选择 ============
+
+  selectMode(mode) {
+    if (this.connectionMode === mode) return
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+
+    this.connectionMode = mode
+    this.showIpSettings = (mode === 'ip')
+    this.testResult = ''
+    this.testResultClass = ''
+    this.ipError = ''
+    this.updateModeName()
+    this.saveSettings()
+  },
+
+  updateModeName() {
+    const cfg = CONNECTION_MODES[this.connectionMode]
+    this.modeName = cfg ? cfg.name : '域名直连'
+  },
+
+  // ============ 自动切换 ============
+
+  toggleAutoSwitch() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.autoSwitch = !this.autoSwitch
+    this.saveSettings()
+  },
+
+  // ============ IP 编辑 ============
+
+  editIp() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    // 初始化 IP 输入弹窗，用当前值填充
+    this.ipInput = this.customIp || ''
+    this.ipError = ''
+    this.updateIpDigits()
+    this.showIpDialog = true
+  },
+
+  // 根据 ipInput 刷新输入格显示
+  updateIpDigits() {
+    const parts = this.ipInput.split('.')
+    const digits = [[], [], [], []]
+    for (let i = 0; i < 4; i++) {
+      const part = parts[i] || ''
+      for (let j = 0; j < part.length; j++) {
+        digits[i].push(part.charAt(j))
+      }
+    }
+    this.ipDigits = digits
+  },
+
+  // 数字/点号键
+  onIpKey(ch) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    // 点号限制：最多 3 个
+    if (ch === '.') {
+      const dotCount = (this.ipInput.match(/\./g) || []).length
+      if (dotCount >= 3) return
+      // 连续点号不允许
+      if (this.ipInput.length === 0 || this.ipInput.charAt(this.ipInput.length - 1) === '.') return
+    }
+    // 数字键：检查当前段是否已满 3 位
+    if (ch !== '.') {
+      const parts = this.ipInput.split('.')
+      const currentPart = parts[parts.length - 1] || ''
+      // 当前段已满 3 位，最后一段也不能再输入
+      if (currentPart.length >= 3) return
+      // 非最后一段且满 3 位，自动添加点号
+      if (parts.length < 4 && currentPart.length >= 3) {
+        this.ipInput += '.'
+      }
+    }
+    this.ipError = ''
+    this.ipInput += ch
+    this.updateIpDigits()
+  },
+
+  // 删除键
+  onIpDelete() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.ipInput.length <= 0) return
+    this.ipError = ''
+    this.ipInput = this.ipInput.slice(0, -1)
+    this.updateIpDigits()
+  },
+
+  // 取消编辑
+  cancelIpEdit() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.showIpDialog = false
+    this.ipError = ''
+  },
+
+  // 确认编辑
+  confirmIpEdit() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (!this.ipInput) {
+      this.ipError = 'IP 地址不能为空'
+      return
+    }
+    if (!this.validateIp(this.ipInput)) {
+      this.ipError = 'IP 地址格式不正确'
+      return
+    }
+    this.customIp = this.ipInput
+    this.showIpDialog = false
+    this.ipError = ''
+    this.saveSettings()
+  },
+
+  // ============ IP 设置 ============
+
+  onIpInput(event) {
+    const value = (event && event.value) || ''
+    this.customIp = value.trim()
+    if (this.validateIp(this.customIp)) {
+      this.ipError = ''
+      this.saveSettings()
+    } else {
+      this.ipError = 'IP 地址格式不正确'
+    }
+  },
+
+  toggleHostHeader() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.addHostHeader = !this.addHostHeader
+    this.saveSettings()
+  },
+
+  // IP 格式验证（四段 0-255）
+  validateIp(ip) {
+    if (!ip) return false
+    const pattern = /^(\d{1,3}\.){3}\d{1,3}$/
+    if (!pattern.test(ip)) return false
+    return ip.split('.').every((part) => {
+      const num = parseInt(part, 10)
+      return num >= 0 && num <= 255
+    })
+  },
+
+  // ============ 连接测试 ============
+
+  testConnection() {
+    if (this.testing) return
+    // IP 直连模式下必须先校验 IP 格式
+    if (this.connectionMode === 'ip' && !this.validateIp(this.customIp)) {
+      this.testResult = 'IP 地址格式不正确'
+      this.testResultClass = 'error'
+      return
+    }
+
+    const that = this
+    this.testing = true
+    this.testResult = ''
+    this.testResultClass = ''
+
+    const url = this.buildTestUrl()
+    const header = this.buildTestHeader()
+
+    console.log('[connection] 测试连接:', url)
+
+    fetch.fetch({
+      url: url,
+      method: 'GET',
+      header: header,
+      responseType: 'json',
+      timeout: 8000,
+      success: (res) => {
+        that.testing = false
+        const data = (res && res.data) || {}
+        if (data.weapons) {
+          that.testResult = '连接成功 ✓'
+          that.testResultClass = 'success'
+          that.saveSettings()
+        } else {
+          that.testResult = '连接失败（数据异常）'
+          that.testResultClass = 'error'
+        }
+      },
+      fail: (data, code) => {
+        that.testing = false
+        that.testResult = '连接失败 (code: ' + code + ')'
+        that.testResultClass = 'error'
+      }
+    })
+  },
+
+  // 根据当前模式构建测试 URL
+  buildTestUrl() {
+    const catalogPath = '/Heihade_index/catalog.json'
+    switch (this.connectionMode) {
+      case 'cdn':
+        return 'https://cdn.jsdelivr.net/gh/MinimumBubble11/Heihade_index@HEAD/catalog.json'
+      case 'ip':
+        return 'https://' + this.customIp + catalogPath
+      case 'domain':
+      default:
+        return 'https://MinimumBubble11.github.io' + catalogPath
+    }
+  },
+
+  // 根据当前模式构建请求头（IP 直连 + Host 头时）
+  buildTestHeader() {
+    if (this.connectionMode === 'ip' && this.addHostHeader) {
+      return { Host: 'MinimumBubble11.github.io' }
+    }
+    return undefined
+  },
+
+  // ============ 恢复默认 ============
+
+  resetToDefault() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.connectionMode = DEFAULT_MODE
+    this.customIp = DEFAULT_IP
+    this.addHostHeader = true
+    this.autoSwitch = AUTO_SWITCH_DEFAULT
+    this.showIpSettings = false
+    this.testResult = ''
+    this.testResultClass = ''
+    this.ipError = ''
+    this.updateModeName()
+    this.saveSettings()
+    prompt.showToast({ message: '已恢复默认设置' })
+  }
+}
+</script>

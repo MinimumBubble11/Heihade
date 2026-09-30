@@ -130,15 +130,17 @@
 </style>
 
 <script>
-import storage from '@system.storage'
-import router from '@system.router'
 import vibrator from '@system.vibrator'
+import vibration from '../../common/vibrate'
+import backnav from '../../common/backnav'
+import settings from '../../common/settings'
 
 export default {
   private: {
     isLoading: true,      // 加载状态
     selected: 'punch',    // 默认值，存储读取后会被覆盖
-    vibrationEnabled: true // 默认开启震动
+    vibrationEnabled: true, // 默认开启震动
+    vibrationMode: 'short'  // 默认短震动
   },
 
   computed: {
@@ -155,30 +157,31 @@ export default {
 
   onInit() {
     this.loadSelectedMode()
+    this.loadVibration()
+  },
+
+  // 加载震动设置（复用设置页可配置的震动模式）
+  loadVibration() {
+    vibration.loadSetting().then((vib) => {
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
+    })
   },
 
   loadSelectedMode() {
-    storage.get({
-      key: 'detect_mode',
-      success: (data) => {
-        if (data) {
-          this.selected = data
-        } else {
-          this.selected = 'punch'
-          this.saveMode('punch')
-        }
-        this.isLoading = false
-      },
-      fail: () => {
+    settings.get('detect_mode').then((data) => {
+      if (data) {
+        this.selected = data
+      } else {
         this.selected = 'punch'
         this.saveMode('punch')
-        this.isLoading = false
       }
+      this.isLoading = false
     })
   },
 
   saveMode(mode) {
-    storage.set({ key: 'detect_mode', value: mode })
+    settings.set('detect_mode', mode)
   },
 
   selectMode(mode) {
@@ -186,20 +189,20 @@ export default {
     this.selected = mode
     this.saveMode(mode)
     if (this.vibrationEnabled) {
-      vibrator.vibrate({ mode: 'short' })
+      vibrator.vibrate({ mode: this.vibrationMode })
     }
   },
 
   onBackPress() {
-    router.replace({ uri: '/pages/start/loading' })
+    backnav.backToPlay()
     return true
   },
 
   goback() {
     if (this.vibrationEnabled) {
-      vibrator.vibrate({ mode: 'short' })
+      vibrator.vibrate({ mode: this.vibrationMode })
     }
-    router.replace({ uri: '/pages/start/loading' })
+    backnav.backToPlay()
   }
 }
 </script>
