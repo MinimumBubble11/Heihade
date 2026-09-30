@@ -1,0 +1,490 @@
+<import name="transferoverlay" src="../../../../components/TransferOverlay"></import>
+
+<template>
+  <!-- 根容器：stack 实现层叠布局，承载底部固定返回按钮 -->
+  <stack class="root-stack">
+    <!-- 滚动内容（双形态安全区由媒体查询控制） -->
+    <scroll id="mainScroll" class="page" scroll-y="true" bounces="true">
+      <!-- 标题行 -->
+      <div class="title-row">
+        <text class="title">在线下载</text>
+      </div>
+
+      <!-- 分类筛选：横向滚动（全部 + 各分类） -->
+      <scroll class="cat-scroll" scroll-x="true" bounces="true">
+        <div class="cat-row">
+          <div class="cat-item {{ currentCat === '' ? 'active' : '' }}" onclick="selectCategory('')">
+            <text class="cat-text">全部</text>
+          </div>
+          <div class="cat-item {{ currentCat === $item ? 'active' : '' }}" for="{{ categories }}" tid="cat" onclick="selectCategory($item)">
+            <text class="cat-text">{{ $item }}</text>
+          </div>
+        </div>
+      </scroll>
+
+      <!-- 加载状态 -->
+      <text if="{{ loading }}" class="loading-text">加载武器目录...</text>
+
+      <!-- 加载失败 -->
+      <div if="{{ loadError }}" class="error-box">
+        <text class="error-title">加载失败</text>
+        <text class="error-hint">请检查网络后重试</text>
+      </div>
+
+      <!-- 武器列表（分页：name + 音频数量 + 描述/作者） -->
+      <div class="weapon-list">
+        <div class="weapon-item" for="{{ pageWeapons }}" tid="id" onclick="onWeaponTap($item)">
+          <div class="weapon-info">
+            <text class="weapon-name">{{ $item.name }}</text>
+            <text class="weapon-meta">{{ $item.audioCount }} 个音频{{ $item.downloaded ? ' · 已下载' : '' }}{{ $item.playMode === 2 ? ' · Combo' : '' }}</text>
+            <text class="weapon-desc" if="{{ $item.description }}">{{ $item.description }}</text>
+            <text class="weapon-author" if="{{ $item.author }}">作者：{{ $item.author }}</text>
+          </div>
+          <text class="weapon-status">{{ $item.downloaded ? '√' : '↓' }}</text>
+        </div>
+      </div>
+
+      <!-- 空状态 -->
+      <div if="{{ weapons.length === 0 && !loading && !loadError }}" class="empty-state">
+        <text class="empty-title">暂无可用武器</text>
+      </div>
+      <div if="{{ weapons.length > 0 && filtered.length === 0 && !loading && !loadError }}" class="empty-state">
+        <text class="empty-title">该分类暂无武器</text>
+      </div>
+
+      <!-- 翻页栏 -->
+      <div class="pager" if="{{ pageWeapons.length > 0 }}">
+        <input class="page-btn" type="button" value="&lt;" onclick="prevPage" />
+        <text class="page-num">{{ pageIndex + 1 }}/{{ totalPages }}</text>
+        <input class="page-btn" type="button" value="&gt;" onclick="nextPage" />
+      </div>
+
+      <div class="bottom-space"></div>
+    </scroll>
+
+    <!-- 下载进度 + 待下载队列：浮层由 transferoverlay 组件承载，定位由本层负责 -->
+    <div class="download-overlay">
+      <transferoverlay source="download" @download-end="refreshDownloadState"></transferoverlay>
+    </div>
+
+    <!-- 固定返回按钮（顶部悬浮，与其他页面一致） -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+    </div>
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: #000000;
+}
+
+.page {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+}
+
+/* 圆屏：上下 10% + 左右 7-8% 安全区，避免圆角裁切 */
+@media (shape: circle) {
+  .page { padding: 35px 10px; }
+}
+
+/* 方屏：小边距即可 */
+@media (shape: rect) {
+  .page { padding: 30px 0; }
+}
+
+/* 标题行 */
+.title-row {
+  width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 6dp;
+}
+
+.title {
+  font-size: 17dp;
+  color: #4ccfff;
+  font-weight: bold;
+}
+
+/* 分类筛选条 */
+.cat-scroll {
+  width: 92%;
+  margin-top: 2dp;
+  margin-bottom: 2dp;
+}
+
+.cat-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.cat-item {
+  height: 26dp;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-radius: 13dp;
+  background-color: #222222;
+  justify-content: center;
+  align-items: center;
+  margin-right: 6dp;
+  border: 2px solid transparent;
+}
+
+.cat-item.active {
+  border-color: #4ccfff;
+  background-color: #2a2a2a;
+}
+
+.cat-text {
+  font-size: 12dp;
+  color: #cccccc;
+}
+
+.loading-text {
+  font-size: 13dp;
+  color: #888888;
+  margin-top: 40dp;
+}
+
+.error-box {
+  width: 90%;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 40dp;
+}
+
+.error-title {
+  font-size: 16dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.error-hint {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 6dp;
+}
+
+/* 武器列表 */
+.weapon-list {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.weapon-item {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+  background-color: #222222;
+  border-radius: 12px;
+}
+
+.weapon-info {
+  flex-direction: column;
+  flex: 1;
+}
+
+.weapon-name {
+  font-size: 16dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.weapon-meta {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 3dp;
+}
+
+.weapon-desc {
+  font-size: 11dp;
+  color: #777777;
+  margin-top: 2dp;
+}
+
+.weapon-author {
+  font-size: 11dp;
+  color: #555555;
+  margin-top: 1dp;
+}
+
+.weapon-status {
+  font-size: 18dp;
+  color: #4ccfff;
+  margin-left: 8dp;
+}
+
+.empty-state {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 60dp;
+}
+
+.empty-title {
+  font-size: 14dp;
+  color: #888888;
+  text-align: center;
+}
+
+/* 翻页栏 */
+.pager {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+@media (shape:circle){
+  .pager{
+    width: 60%;
+  }
+}
+
+.page-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 100%;
+  border: 2px solid #333333;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #4ccfff;
+}
+
+.page-num {
+  font-size: 15px;
+  color: #ffffff;
+}
+
+.bottom-space {
+  width: 100%;
+  height: 30px;
+}
+
+/* 下载进度：置顶悬浮屏幕中央 */
+.download-overlay {
+  position: absolute;
+  top: 38%;
+  left: 0;
+  width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 返回按钮：与项目其他页面（menu/setting/custom 等）保持一致的定位方式，
+   position:absolute 不设 top/bottom，固定悬浮在顶部 */
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  height: 35dp;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-button-fixed {
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #cccccc;
+}
+</style>
+
+<script>
+import router from '@system.router'
+import storage from '@system.storage'
+import vibrator from '@system.vibrator'
+import prompt from '@system.prompt'
+import downloadModule from '../../../../common/download'
+import audioSync from '../../../../common/audiosync'
+import dlManager from '../../../../common/downloadmanager'
+import vibration from '../../../../common/vibrate'
+
+// 每页显示武器数量（平铺过多易崩溃，故分页渲染）
+const PAGE_SIZE = 20
+
+export default {
+  private: {
+    vibrationEnabled: true,
+    vibrationMode: 'short',
+    loading: true,
+    loadError: false,
+    weapons: [],
+    filtered: [],
+    pageWeapons: [],
+    pageIndex: 0,
+    totalPages: 1,
+    categories: [],
+    currentCat: ''
+  },
+
+  onInit() {
+    this.loadSettings()
+    audioSync.init()
+    this.loadCatalog()
+  },
+
+  onShow() {
+    if (!dlManager.isDownloading()) {
+      this.refreshDownloadState()
+    }
+  },
+
+  loadSettings() {
+    vibration.loadSetting().then((vib) => {
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
+    })
+  },
+
+  // 拉取武器目录并渲染（数据源：腾讯云 COS）
+  loadCatalog() {
+    const that = this
+    this.loading = true
+    this.loadError = false
+    downloadModule.fetchCatalog((list) => {
+      that.loading = false
+      if (!list) {
+        that.loadError = true
+        return
+      }
+      that.weapons = (list || []).map((w) => {
+        w.downloaded = false
+        return w
+      })
+      const cats = []
+      ;(that.weapons || []).forEach((w) => {
+        const c = w.category || 'other'
+        if (cats.indexOf(c) === -1) cats.push(c)
+      })
+      that.categories = cats
+      that.filtered = that.weapons.slice()
+      that.pageIndex = 0
+      that.updatePages()
+      that.refreshDownloadState()
+    })
+  },
+
+  // 从 audiosync 清单标记已下载武器
+  refreshDownloadState() {
+    const that = this
+    audioSync.load((list) => {
+      const ids = {}
+      ;(list || []).forEach((x) => { ids[x.id] = true })
+      that.weapons = (that.weapons || []).map((w) => {
+        w.downloaded = !!ids[w.id]
+        return w
+      })
+      that.applyFilter()
+    })
+  },
+
+  // ===== 分类筛选（本地过滤，不请求网络） =====
+  selectCategory(cat) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.currentCat = cat || ''
+    this.applyFilter()
+  },
+
+  applyFilter() {
+    let list = this.weapons || []
+    if (this.currentCat) {
+      list = list.filter((w) => (w.category || 'other') === this.currentCat)
+    }
+    this.filtered = list.slice()
+    this.pageIndex = 0
+    this.updatePages()
+  },
+
+  // ===== 分页 =====
+  updatePages() {
+    this.totalPages = Math.max(1, Math.ceil(this.filtered.length / PAGE_SIZE))
+    if (this.pageIndex > this.totalPages - 1) this.pageIndex = this.totalPages - 1
+    this.applyPage()
+  },
+
+  applyPage() {
+    const start = this.pageIndex * PAGE_SIZE
+    this.pageWeapons = this.filtered.slice(start, start + PAGE_SIZE)
+  },
+
+  prevPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.pageIndex <= 0) return
+    this.pageIndex--
+    this.applyPage()
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  nextPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.pageIndex >= this.totalPages - 1) return
+    this.pageIndex++
+    this.applyPage()
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  // 滚动到页面最底部（翻页渲染完成后执行；超大 top 值由框架钳制到最大滚动量）
+  scrollToBottom() {
+    const that = this
+    this.$nextTick(() => {
+      const scrollEl = that.$element('mainScroll')
+      if (scrollEl) {
+        scrollEl.scrollTo({ top: 999999, behavior: 'instant' })
+      }
+    })
+  },
+
+  // 点击武器：已下载提示；否则交给全局下载管理器（空闲立即下载 / 下载中入队）
+  onWeaponTap(item) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (item.downloaded) {
+      prompt.showToast({ message: '该音效已下载', duration: 1500 })
+      return
+    }
+    const r = dlManager.enqueue(item)
+    if (r === 'downloading') {
+      prompt.showToast({ message: '该音效正在下载中', duration: 1500 })
+    } else if (r === 'duplicate') {
+      prompt.showToast({ message: '该音效已在队列中', duration: 1200 })
+    } else if (r === 'full') {
+      prompt.showToast({ message: '下载队列已满（最多3个）', duration: 1500 })
+    } else if (r === 'queued') {
+      prompt.showToast({ message: '已加入下载队列（' + dlManager.getState().queue.length + '/3）', duration: 1200 })
+    }
+  },
+
+  // 物理返回键：返回上一页
+  onBackPress() {
+    router.back()
+    return true
+  },
+
+  goBack() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.back()
+  }
+}
+</script>

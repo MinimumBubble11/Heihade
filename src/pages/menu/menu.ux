@@ -3,73 +3,56 @@
     <!-- 滚动内容：添加 id 和 onscroll 事件 -->
     <scroll id="mainScroll" class="page" scroll-y="true" bounces="true" onscroll="onScrollHandler">
       <div class="btnbox">
-        <input class="btn" type="button" value="挥拳" onclick="gotoPage('Quantou')" />
-        <input class="btn" type="button" value="手枪" onclick="gotoPage('Shouqiang')" />
-        <input class="btn" type="button" value="AK47" onclick="gotoPage('AK47')" />
-        <input class="btn" type="button" value="AWM" onclick="gotoPage('AWM')" />
-        <input class="btn" type="button" value="霰弹枪" onclick="gotoPage('S1897')" />
-        <input class="btn" type="button" value="无畏契约" onclick="gotoPage('Val')" />
-        <input class="btn" type="button" value="激光枪" onclick="gotoPage('Jiguangqiang')" />
-        <input class="btn" type="button" value="挥剑" onclick="gotoPage('Jian')" />
-        <input class="btn" type="button" value="手榴弹" onclick="gotoPage('Shouliudan')" />
-        <input class="btn" type="button" value="CS炸弹" onclick="gotoPage('CSboom')" />
-        <input class="btn" type="button" value="磁吸炸弹" onclick="gotoPage('Cixizhadan')" />
-        <input class="btn" type="button" value="钢管" onclick="gotoPage('Gangguan')" />
-        <input class="btn" type="button" value="铁砧" onclick="gotoPage('Tiezhen')" />
-        <input class="btn" type="button" value="不死图腾" onclick="gotoPage('Busituteng')" />
-        <input class="btn" type="button" value="竹知了" onclick="gotoPage('Zhuzhiliao')" />
-        <input class="btn" type="button" value="哈基米" onclick="gotoPage('Hajimi')" />
-        <input class="btn" type="button" value="蒸蚌" onclick="gotoPage('Zhengbang')" />
-        <input class="btn" type="button" value="嘲笑猫" onclick="gotoPage('Chaoxiaomao')" />
-        <input class="btn" type="button" value="巴巴博一" onclick="gotoPage('Bababoyi')" />
-        <input class="btn" type="button" value=" 开 !" onclick="gotoPage('Kai')" />
-        <input class="btn" type="button" value="比比拉布" onclick="gotoPage('Bibilabu')" />
-        <input class="btn" type="button" value="我的刀盾" onclick="gotoPage('Daodun')" />
-        <input class="btn" type="button" value="八嘎雅鹿" onclick="gotoPage('Bagayalu')" />
-        <input class="btn" type="button" value="大狗叫叫" onclick="gotoPage('Dagoujiao')" />
-        <input class="btn" type="button" value="咕咕嘎嘎" onclick="gotoPage('Couqie')" />
-        <input class="btn" type="button" value="难道说" onclick="gotoPage('Nandaoshuo')" />
-        <input class="btn" type="button" value="Oh m god" onclick="gotoPage('Ohmg')" />
-        <input class="btn" type="button" value="曼波" onclick="gotoPage('Manbo')" />
-        <input class="btn" type="button" value="欧曼波" onclick="gotoPage('Manboa')" />
-        <input class="btn" type="button" value="阿西噶" onclick="gotoPage('Axiga')" />
-        <input class="btn" type="button" value="划过我心" onclick="gotoPage('Huaguowo')" />
-        <input class="btn" type="button" value="刺痛我心" onclick="gotoPage('Citongwoxin')" />
-        <input class="btn" type="button" value="再火一回" onclick="gotoPage('Zaihuoyihui')" />
-        <input class="btn" type="button" value="再起" onclick="gotoPage('Zaiqi')" />
-        <input class="btn" type="button" value="爱上雷神" onclick="gotoPage('Aishangleishen')" />
-        <input class="btn" type="button" value="奶蛙" onclick="gotoPage('Naiwa')" />
-        <input class="btn" type="button" value="滴辣虾" onclick="gotoPage('Gagadilaxia')" />
-        <input class="btn" type="button" value="嘎达嘎达" onclick="gotoPage('Gadagada')" />
-        <input class="btn" type="button" value="汤姆惨叫" onclick="gotoPage('Tom')" />
-        <input class="btn" type="button" value="汤姆笑" onclick="gotoPage('Tomlaugh')" />
-        <input class="btn" type="button" value="歹徒" onclick="gotoPage('Daitu')" />
-        <input class="btn" type="button" value="万象天引" onclick="gotoPage('Wanxiangtianyin')" />
-        <input class="btn" type="button" value="神罗天征" onclick="gotoPage('Shenluotianzheng')" />
-        <input class="btn" type="button" value="阿玛特拉斯" onclick="gotoPage('Amatelasi')" />
-        <input class="btn" type="button" value="魔术技巧" onclick="gotoPage('Magic')" />
-        <input class="btn" type="button" value="轻松绷住" onclick="gotoPage('Easybengzhu')" />
-        <input class="btn" type="button" value="法国赌神" onclick="gotoPage('Dushen')" />
-        <input class="btn" type="button" value="自刎归天" onclick="gotoPage('Ziwenguitian')" />
-        <input class="btn" type="button" value="遥遥领先" onclick="gotoPage('Yaoyaolingxian')" />
-        <input class="btn" type="button" value="黑手哥" onclick="gotoPage('Cao')" />
-        <input class="btn" type="button" value="雨姐" onclick="gotoPage('Yujie')" />
-        <input class="btn" type="button" value="坤坤" onclick="gotoPage('Kun')" />
-        <input class="btn" type="button" value="五字真言" onclick="gotoPage('Leijun')" />
-        <input class="btn" type="button" value="康神" onclick="gotoPage('Kangshen')" />
-        <input class="btn" type="button" value="张老师" onclick="gotoPage('Zhangxuefeng')" />
-        <input class="btn" type="button" value="Man" onclick="gotoPage('Man')" />
-        <input class="btn" type="button" value="海公牛" onclick="gotoPage('Haigongniu')" />
-        <input class="btn" type="button" value="老奶奶" onclick="gotoPage('Laonainai')" />
-        <input class="btn" type="button" value="鼻屎奶奶笑" onclick="gotoPage('Bishi')" />
-        <input class="btn" type="button" value="雷霆动物" onclick="gotoPage('Leitingdongwu')" />
-        <input class="btn" type="button" value="受伤" onclick="gotoPage('MChit')" />
-        <input class="btn" type="button" value="进食" onclick="gotoPage('MCeating')" />
-        <input class="btn" type="button" value="开箱" onclick="gotoPage('MCchest')" />
-        <input class="btn" type="button" value="击打村民" onclick="gotoPage('Villager')" />
-        <input class="btn" type="button" value="歪比巴卜" onclick="gotoPage('Waibibabu')" />
-        <input class="btn" type="button" value="异议" onclick="gotoPage('Yiyi')" />
-        <input class="btn" type="button" value="回城" onclick="gotoPage('Home')" />
+        <!-- ★ 数据加载中：仅显示“加载中...”提示 -->
+        <block if="{{ loading }}">
+          <text class="loading-text">加载中...</text>
+        </block>
+
+        <!-- ★ 数据加载完成：才显示所有元素（音效管理/已下载/内置） -->
+        <block if="{{ !loading }}">
+          <!-- ★ 自定义音频同步入口 -->
+          <div class="menu-actions">
+            <input class="btn" type="button" value="音效管理" onclick="goCustomAudio" style="background-color: #1f3a2c;color: #87e9c6;" />
+            <input class="btn" type="button" value="联网下载" onclick="goGithubDownload" />
+          </div>
+
+          <!-- ★ 已下载区（可收起/展开，点击播放，分页每页 5 个） -->
+          <block if="{{ downloadedList.length > 0 }}">
+            <div class="section-header" onclick="toggleDownloaded">
+              <text class="section-title">已下载</text>
+              <text class="section-arrow">{{ downloadedCollapsed ? '→' : '↓' }}</text>
+            </div>
+            <block if="{{ !downloadedCollapsed }}">
+              <div class="menu-item" for="{{ downloadedPage }}" tid="id" onclick="onDownloadedClick($item)">
+                <text class="menu-name">{{ $item.name }}</text>
+                <text class="menu-arrow">›</text>
+              </div>
+              <div class="pager" if="{{ downloadedPage.length > 0 }}">
+                <input class="page-btn" type="button" value="&lt;" onclick="prevDownloadedPage" />
+                <text class="page-num">{{ downloadedPageIndex + 1 }}/{{ downloadedTotalPages }}</text>
+                <input class="page-btn" type="button" value="&gt;" onclick="nextDownloadedPage" />
+              </div>
+            </block>
+          </block>
+
+          <!-- ★ 内置音效区（可收起/展开，分页每页 5 个） -->
+          <div class="section-header" onclick="toggleBuiltin">
+            <text class="section-title">内置音效</text>
+            <text class="section-arrow">{{ builtinCollapsed ? '→' : '↓' }}</text>
+          </div>
+          <block if="{{ !builtinCollapsed }}">
+            <div class="menu-item" for="{{ pageList }}" tid="key" onclick="onItemClick($item)">
+              <text class="menu-name">{{ $item.name }}</text>
+              <text class="menu-arrow">&gt</text>
+            </div>
+            <!-- ★ 分页栏 -->
+            <div class="pager" if="{{ pageList.length > 0 }}">
+              <input class="page-btn" type="button" value="&lt;" onclick="prevPage" />
+              <text class="page-num">{{ pageIndex + 1 }}/{{ totalPages }}</text>
+              <input class="page-btn" type="button" value="&gt;" onclick="nextPage" />
+            </div>
+          </block>
+        </block>
       </div>
       <div class='btnbox'></div>
     </scroll>
@@ -98,9 +81,7 @@
 .btnbox {
   margin-top: 30px;
   width: 100%;
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
 }
 
@@ -114,6 +95,98 @@
   color: #82d1ff;
   text-align: center;
   margin: 4dp;
+}
+
+.menu-actions {
+  width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 数据加载中的提示文本 */
+.loading-text {
+  width: 100%;
+  text-align: center;
+  font-size: 14dp;
+  color: #888888;
+  margin-top: 20dp;
+}
+
+/* 分区标题栏（已下载 / 内置音效，可点击收起/展开） */
+.section-header {
+  width: 92%;
+  background-color: #222222;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 15%;
+  margin-top: 10px;
+  margin-bottom: 2px;
+  padding: 4px 15px;
+}
+
+.section-title {
+  font-size: 13dp;
+  color: #888888;
+  text-align: left;
+}
+
+.section-arrow {
+  font-size: 12dp;
+  color: #888888;
+}
+
+/* 平铺列表项（每行一个音效） */
+.menu-item {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 10px;
+  margin: 4px 0;
+  background-color: #333333;
+  border-radius: 12px;
+}
+
+.menu-name {
+  font-size: 15dp;
+  color: #82d1ff;
+  font-weight: bold;
+}
+
+.menu-arrow {
+  font-size: 14dp;
+  color: #82d1ff;
+}
+
+/* 分页栏 */
+.pager {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+@media (shape:circle){
+  .pager{
+    width: 60%;
+  }
+}
+
+.page-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 100%;
+  border: 2px solid #333333;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #4ccfff;
+}
+
+.page-num {
+  font-size: 15px;
+  color: #ffffff;
 }
 
 /* 固定返回按钮包装器（居中） */
@@ -143,80 +216,299 @@
     margin: 4dp;
   }
 }
+
+@media (shape: circle) {
+  .section-header{
+    width: 80%;
+    padding: 4px 8px;
+  }
+
+  .menu-item{
+    width: 76%;
+    padding: 6px 12px;
+  }
+}
 </style>
 
 <script>
 import router from '@system.router'
-import storage from '@system.storage'
 import vibrator from '@system.vibrator'
+import prompt from '@system.prompt'
+import pages from '../../common/pages'
+import audioSync from '../../common/audiosync'
+import vibration from '../../common/vibrate'
+import settings from '../../common/settings'
+
+// 每页显示的音效数量
+const PAGE_SIZE = 5
 
 export default {
   private: {
-    vibrationEnabled: true
+    vibrationEnabled: true,
+    vibrationMode: 'short',
+    // ★ 自动获取的音效列表
+    menuList: [],
+    // ★ 分页渲染的当前页列表
+    pageList: [],
+    pageIndex: 0,
+    totalPages: 1,
+    // ★ 已下载音效（来自 audiosync 清单，独立分区展示）
+    downloadedList: [],
+    downloadedPage: [],
+    downloadedPageIndex: 0,
+    downloadedTotalPages: 1,
+    // ★ 分区收起状态（true=收起，默认收起）
+    downloadedCollapsed: true,
+    builtinCollapsed: true,
+    // ★ 数据加载状态（获取音效列表期间显示“加载中...”）
+    loading: true
   },
 
-  // ★ 页面就绪时恢复滚动位置
-  onReady() {
+  // ★ 自动获取音效列表（遍历 common/pages.js 唯一数据源，新增音效无需再改菜单）
+  buildMenuList() {
+    const list = []
+    Object.keys(pages).forEach(function(key) {
+      const cfg = pages[key]
+      if (cfg && cfg.name) {
+        list.push({ key: key, name: cfg.name })
+      }
+    })
+    this.menuList = list
+    this.updatePages()
+  },
+
+  // ===== 分页（每页 5 个音效） =====
+  updatePages() {
+    this.totalPages = Math.max(1, Math.ceil(this.menuList.length / PAGE_SIZE))
+    if (this.pageIndex > this.totalPages - 1) this.pageIndex = this.totalPages - 1
+    this.applyPage()
+  },
+
+  applyPage() {
+    const start = this.pageIndex * PAGE_SIZE
+    this.pageList = this.menuList.slice(start, start + PAGE_SIZE)
+  },
+
+  prevPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.pageIndex <= 0) return
+    this.pageIndex--
+    this.applyPage()
+    settings.set('menu_builtin_page', String(this.pageIndex))
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  nextPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.pageIndex >= this.totalPages - 1) return
+    this.pageIndex++
+    this.applyPage()
+    settings.set('menu_builtin_page', String(this.pageIndex))
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  // ===== 已下载音效（来自 audiosync，分页每页 5 个） =====
+  loadDownloaded() {
     const that = this
-    storage.get({
-      key: 'scroll_position',
-      success: function(data) {
-        if (data) {
-          that.$nextTick(() => {
-            const scrollEl = that.$element('mainScroll')
-            if (scrollEl) {
-              scrollEl.scrollTo({
-                top: parseInt(data, 10),
-                behavior: 'instant'
-              })
-            }
-          })
-        }
-      },
-      fail: function() {
-        // 忽略
+    audioSync.load(function(list) {
+      that.downloadedList = (list || []).map(function(s) {
+        return { id: s.id, name: s.name }
+      })
+      that.downloadedUpdatePages()
+      // ★ 内置列表与已下载均加载完成后，才关闭“加载中...”提示并显示所有元素
+      that.loading = false
+    })
+  },
+
+  // 恢复折叠状态与页码（应用不重启期间保持用户操作，首次进入默认收起；settings 内存缓存）
+  loadMenuState() {
+    const that = this
+    settings.get('menu_downloaded_collapsed').then(function(data) {
+      if (data !== undefined && data !== null && data !== '') {
+        that.downloadedCollapsed = (data === 'true')
+      }
+    })
+    settings.get('menu_builtin_collapsed').then(function(data) {
+      if (data !== undefined && data !== null && data !== '') {
+        that.builtinCollapsed = (data === 'true')
+      }
+    })
+    settings.get('menu_downloaded_page').then(function(data) {
+      if (data !== undefined && data !== null && data !== '') {
+        that.downloadedPageIndex = parseInt(data, 10) || 0
+        if (that.downloadedList.length > 0) that.downloadedUpdatePages()
+      }
+    })
+    settings.get('menu_builtin_page').then(function(data) {
+      if (data !== undefined && data !== null && data !== '') {
+        that.pageIndex = parseInt(data, 10) || 0
+        that.updatePages()
       }
     })
   },
 
-  // ★ 滚动时存储当前位置
+  downloadedUpdatePages() {
+    this.downloadedTotalPages = Math.max(1, Math.ceil(this.downloadedList.length / PAGE_SIZE))
+    if (this.downloadedPageIndex > this.downloadedTotalPages - 1) this.downloadedPageIndex = this.downloadedTotalPages - 1
+    this.downloadedApplyPage()
+  },
+
+  downloadedApplyPage() {
+    const start = this.downloadedPageIndex * PAGE_SIZE
+    this.downloadedPage = this.downloadedList.slice(start, start + PAGE_SIZE)
+  },
+
+  prevDownloadedPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.downloadedPageIndex <= 0) return
+    this.downloadedPageIndex--
+    this.downloadedApplyPage()
+    settings.set('menu_downloaded_page', String(this.downloadedPageIndex))
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  nextDownloadedPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.downloadedPageIndex >= this.downloadedTotalPages - 1) return
+    this.downloadedPageIndex++
+    this.downloadedApplyPage()
+    settings.set('menu_downloaded_page', String(this.downloadedPageIndex))
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  // 滚动到页面最底部（翻页渲染完成后执行；超大 top 值由框架钳制到最大滚动量）
+  scrollToBottom() {
+    const that = this
+    this.$nextTick(() => {
+      const scrollEl = that.$element('mainScroll')
+      if (scrollEl) {
+        scrollEl.scrollTo({ top: 999999, behavior: 'instant' })
+      }
+    })
+  },
+
+  // 点击已下载音效：进入统一播放页（custom 模式）
+  onDownloadedClick(item) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    const targetUri = '/pages/play?custom=' + item.id
+    settings.set('lastTargetPage', targetUri)
+    router.replace({ uri: targetUri, params: { ___PARAM_LAUNCH_FLAG___: 'clearTask' } })
+  },
+
+  // 已下载区：收起/展开（状态持久化，应用不重启期间保持）
+  toggleDownloaded() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.downloadedCollapsed = !this.downloadedCollapsed
+    settings.set('menu_downloaded_collapsed', String(this.downloadedCollapsed))
+  },
+
+  // 内置音效区：收起/展开（状态持久化，应用不重启期间保持）
+  toggleBuiltin() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.builtinCollapsed = !this.builtinCollapsed
+    settings.set('menu_builtin_collapsed', String(this.builtinCollapsed))
+  },
+
+  // ★ 每次显示时刷新已下载区（从下载/自定义页返回时保证最新）
+  onShow() {
+    this.loadDownloaded()
+  },
+
+  // ★ 页面就绪时自动获取音效并恢复滚动位置
+  onReady() {
+    const that = this
+    this.loadVibration()
+    this.loadMenuState()
+    this.buildMenuList()
+    this.loadDownloaded()
+    settings.get('scroll_position').then(function(data) {
+      if (data) {
+        that.$nextTick(() => {
+          const scrollEl = that.$element('mainScroll')
+          if (scrollEl) {
+            scrollEl.scrollTo({
+              top: parseInt(data, 10),
+              behavior: 'instant'
+            })
+          }
+        })
+      }
+    })
+  },
+
+  // ★ 滚动时存储当前位置（节流写入：300ms 合并一次，降低高频 storage 写）
   onScrollHandler(e) {
-    storage.set({
-      key: 'scroll_position',
-      value: String(e.scrollY)
+    settings.setThrottled('scroll_position', e.scrollY, 300)
+  },
+
+  // ★ 加载震动设置（复用设置页可配置的震动模式）
+  loadVibration() {
+    vibration.loadSetting().then((vib) => {
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
     })
   },
 
   // 返回按钮（带震动）
   goBack() {
     if (this.vibrationEnabled) {
-      vibrator.vibrate({ mode: 'short' })
+      vibrator.vibrate({ mode: this.vibrationMode })
+    }
+    // 加载中禁止返回
+    if (this.loading) {
+      prompt.showToast({ message: '正在加载，请稍候', duration: 1000 })
+      return
     }
     router.replace({ uri: '/pages/start/loading' })
   },
 
   // 系统返回键拦截
   onBackPress() {
+    // 加载中禁止返回
+    if (this.loading) {
+      prompt.showToast({ message: '正在加载，请稍候', duration: 1000 })
+      return true
+    }
     router.replace({ uri: '/pages/start/loading' })
     return true
   },
 
   // 公共重置方法（原逻辑）
   resetSharedState() {
-    storage.set({ key: 'play_count', value: '0' })
-    storage.set({ key: 'is_locked', value: 'false' })
-    storage.set({ key: 'fixed_play_count', value: '0' })
-    storage.set({ key: 'group_locked', value: 'false' })
-    storage.set({ key: 'locked_group', value: '1' })
-    storage.set({ key: 'group_inner_index', value: '0' })
+    settings.set('play_count', '0')
+    settings.set('is_locked', 'false')
+    settings.set('fixed_play_count', '0')
+    settings.set('group_locked', 'false')
+    settings.set('locked_group', '1')
+    settings.set('group_inner_index', '0')
   },
 
-  // ★ 通用跳转方法（替代所有单独的方法）
-  gotoPage(pageName) {
+  // ★ 通用跳转方法（统一播放页，替代所有单独页面） ★
+  onItemClick(item) {
     this.resetSharedState()
-    const targetUri = '/pages/' + pageName
-    storage.set({ key: 'lastTargetPage', value: targetUri })
-    router.replace({ uri: targetUri })
+    // 独立页面：CS 炸弹、遥遥领先，其余音效仍走统一播放页
+    const standalonePages = { CSboom: '/pages/play/CSboom', Yaoyaolingxian: '/pages/play/Yaoyaolingxian' }
+    const targetUri = standalonePages[item.key] || ('/pages/play?name=' + item.key)
+    settings.set('lastTargetPage', targetUri)
+    router.replace({ uri: targetUri, params: { ___PARAM_LAUNCH_FLAG___: 'clearTask' } })
+  },
+
+  // ★ 自定义音频同步入口 ★
+  goCustomAudio() {
+    if (this.vibrationEnabled) {
+      vibrator.vibrate({ mode: this.vibrationMode })
+    }
+    router.replace({ uri: '/pages/menu/custom' })
+  },
+
+  // 在线下载入口：通过 loading.ux 中央路由，由开关决定跳转新版/旧版商店
+  goGithubDownload() {
+    vibration.vibrate(this.vibrationMode)
+    router.push({ uri: '/pages/start/loading', params: { target: 'download' } })
   }
 }
 </script>

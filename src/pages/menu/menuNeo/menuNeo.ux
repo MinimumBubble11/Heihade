@@ -1,0 +1,742 @@
+<!--
+  menuNeo —— 新版音效菜单
+  内容：内置音效（common/pages.js）+ 已下载音效（audiosync）合并成一条平铺列表
+  特性：分页（每页 10 个）+ 页码/滚动位置返回 + 音效分类 + 搜索（名称/分类）+ 自研拼音输入法 + 联网下载入口
+-->
+<import name="input-method" src="../../../components/InputMethod/InputMethod.ux"></import>
+
+<template>
+  <stack class="root-stack">
+    <scroll id="mainScroll" class="page" scroll-y="true" bounces="true" onscroll="onScrollHandler">
+      <!-- 标题行 -->
+      <div class="title-row">
+        <text class="title">音效菜单</text>
+      </div>
+
+      <!-- 联网下载入口 -->
+      <div class="menu-actions">
+        <input class="btn" type="button" value="音效管理" onclick="goCustomAudio" style="background-color: #1f3a2c;color: #87e9c6;" />
+        <input class="btn" type="button" value="联网下载" onclick="goGithubDownload" />
+      </div>
+
+      <!-- 搜索框（点击唤起自研输入法） -->
+      <div class="search-row" id="searchRow">
+        <div class="search-box" onclick="openKeyboard">
+          <text class="search-text" if="{{ searchText }}">{{ searchText }}</text>
+          <text class="search-placeholder" if="{{ !searchText }}">搜索音效（拼音/英文）</text>
+        </div>
+        <div class="search-clear" if="{{ !keyboardHide }}" onclick="closeKeyboard">
+          <text class="search-clear-text">↓</text>
+        </div>
+        <div class="search-clear" elif="{{ searchText }}" onclick="clearSearch">
+          <text class="search-clear-text">✕</text>
+        </div>
+      </div>
+
+      <!-- 分类筛选：横向滚动（全部 + 内置 + 各分类） -->
+      <scroll class="cat-scroll" scroll-x="true" bounces="true">
+        <div class="cat-row">
+          <div class="cat-item {{ currentCat === '' ? 'active' : '' }}" onclick="selectCategory('')">
+            <text class="cat-text">全部</text>
+          </div>
+          <div class="cat-item {{ currentCat === $item ? 'active' : '' }}" for="{{ categories }}" tid="cat" onclick="selectCategory($item)">
+            <text class="cat-text">{{ $item }}</text>
+          </div>
+        </div>
+      </scroll>
+
+      <!-- 加载状态 -->
+      <text if="{{ loading }}" class="loading-text">加载中...</text>
+
+      <!-- 音效列表：分页展示（每页 10 个），显示分类标签 -->
+      <div class="sound-list">
+        <div class="sound-item" for="{{ pageList }}" tid="id" onclick="onSoundTap($item)">
+          <div class="sound-info">
+            <text class="sound-name">{{ $item.name }}</text>
+            <text class="sound-meta">{{ $item.category }}</text>
+          </div>
+          <text class="sound-arrow">›</text>
+        </div>
+      </div>
+
+      <!-- 分页栏（过滤结果非空时显示） -->
+      <div class="pager" if="{{ filteredSounds.length > 0 }}">
+        <input class="page-btn" type="button" value="&lt;" onclick="prevPage" />
+        <text class="page-num">{{ pageIndex + 1 }}/{{ totalPages }}</text>
+        <input class="page-btn" type="button" value="&gt;" onclick="nextPage" />
+      </div>
+
+      <!-- 空状态 -->
+      <div if="{{ allSounds.length > 0 && filteredSounds.length === 0 && !loading }}" class="empty-state">
+        <text class="empty-title">没有匹配的音效</text>
+      </div>
+
+      <div class="bottom-space"></div>
+      <div class="kb-space" if="{{ !keyboardHide }}"></div>
+    </scroll>
+
+    <!-- 固定返回按钮 -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+    </div>
+
+    <!-- 自研输入法（底部悬浮，hide 控制显隐） -->
+    <input-method
+      hide="{{ keyboardHide }}"
+      keyboardtype="QWERTY"
+      maxlength="5"
+      vibratemode="{{ vibrationMode }}"
+      screentype="circle"
+      @complete="onInputComplete"
+      @delete="onInputDelete"
+      @key-down="onInputKeyDown"
+      @visibility-change="onInputVisibilityChange">
+    </input-method>
+
+    <!-- 加载遮罩：数据加载 + 恢复滚动位置完成前全屏显示 -->
+    <stack if="{{ showLoadingMask }}" class="loading-mask">
+      <text class="loading-mask-text">加载中...</text>
+    </stack>
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: #000000;
+}
+
+.page {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+}
+
+/* 圆屏：上下 10% + 左右 7-8% 安全区 */
+@media (shape: circle) {
+  .page { padding: 35px 10px; }
+}
+
+/* 方屏：小边距 */
+@media (shape: rect) {
+  .page { padding: 30px 0; }
+}
+
+.title-row {
+  width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 6dp;
+}
+
+.title {
+  font-size: 17dp;
+  color: #4ccfff;
+  font-weight: bold;
+}
+
+/* 联网下载入口 */
+.menu-actions {
+  width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 4dp;
+}
+
+.btn {
+  width: 75dp;
+  height: 31dp;
+  border-radius: 18%;
+  background-color: #333333;
+  font-size: 15dp;
+  font-weight: bold;
+  color: #82d1ff;
+  text-align: center;
+  margin: 4dp;
+}
+
+/* 搜索框 */
+.search-row {
+  width: 92%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 4dp;
+}
+
+.search-box {
+  flex: 1;
+  height: 28dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  justify-content: center;
+  align-items: center;
+  border: 2px solid #555555;
+}
+
+.search-text {
+  font-size: 14dp;
+  color: #ffffff;
+}
+
+.search-placeholder {
+  font-size: 12dp;
+  color: #777777;
+}
+
+.search-clear {
+  width: 28dp;
+  height: 28dp;
+  margin-left: 6dp;
+  border-radius: 14dp;
+  background-color: #333333;
+  justify-content: center;
+  align-items: center;
+}
+
+.search-clear-text {
+  font-size: 14dp;
+  color: #ff6b6b;
+}
+
+/* 分类筛选条 */
+.cat-scroll {
+  width: 92%;
+  margin-top: 2dp;
+  margin-bottom: 2dp;
+}
+
+.cat-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.cat-item {
+  height: 26dp;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-radius: 13dp;
+  background-color: #222222;
+  justify-content: center;
+  align-items: center;
+  margin-right: 6dp;
+  border: 2px solid transparent;
+}
+
+.cat-item.active {
+  border-color: #4ccfff;
+  background-color: #2a2a2a;
+}
+
+.cat-text {
+  font-size: 12dp;
+  color: #cccccc;
+}
+
+.loading-text {
+  font-size: 13dp;
+  color: #888888;
+  margin-top: 40dp;
+}
+
+/* 音效列表（平铺） */
+.sound-list {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sound-item {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+  background-color: #222222;
+  border-radius: 12px;
+}
+
+.sound-info {
+  flex-direction: column;
+  flex: 1;
+}
+
+.sound-name {
+  font-size: 16dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.sound-meta {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 3dp;
+}
+
+.sound-arrow {
+  font-size: 18dp;
+  color: #4ccfff;
+  margin-left: 8dp;
+}
+
+.empty-state {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 60dp;
+}
+
+.empty-title {
+  font-size: 14dp;
+  color: #888888;
+  text-align: center;
+}
+
+/* 分页栏 */
+.pager {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+@media (shape:circle){
+  .pager{
+    width: 60%;
+  }
+}
+
+.page-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 100%;
+  border: 2px solid #333333;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #4ccfff;
+}
+
+.page-num {
+  font-size: 15px;
+  color: #ffffff;
+}
+
+.bottom-space {
+  width: 100%;
+  height: 30px;
+}
+
+/* 键盘打开时额外留白，避免最后一项被键盘遮挡 */
+.kb-space {
+  width: 100%;
+  height: 150dp;
+}
+
+/* 返回按钮 */
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  height: 35dp;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-button-fixed {
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #cccccc;
+}
+
+/* 加载遮罩：全屏覆盖，数据加载 + 恢复滚动完成前显示 */
+.loading-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: #000000;
+}
+
+.loading-mask-text {
+  font-size: 14dp;
+  color: #888888;
+}
+</style>
+
+<script>
+import router from '@system.router'
+import vibrator from '@system.vibrator'
+import prompt from '@system.prompt'
+import pages from '../../../common/pages'
+import audioSync from '../../../common/audiosync'
+import vibration from '../../../common/vibrate'
+import settings from '../../../common/settings'
+
+// 每页显示的音效数量
+const PAGE_SIZE = 10
+
+export default {
+  private: {
+    vibrationEnabled: true,
+    vibrationMode: 'short',
+    loading: true,
+    allSounds: [],
+    filteredSounds: [],
+    categories: [],
+    currentCat: '',
+    searchText: '',
+    keyboardHide: true,
+    scrollY: 0,
+    builtin: [],
+    downloaded: [],
+    // ★ 分页（每页 10 个音效）
+    pageList: [],
+    pageIndex: 0,
+    totalPages: 1,
+    // ★ 加载遮罩：数据加载 + 恢复滚动完成前显示
+    showLoadingMask: true,
+    _pageRestored: false,
+    _loadFinished: false
+  },
+
+  onInit() {
+    this.loadVibration()
+    this.loadSounds()
+  },
+
+  onShow() {
+    // 每次显示时刷新已下载音效（从下载页/自定义页返回时保证最新）
+    this.loadSounds()
+  },
+
+  loadVibration() {
+    vibration.loadSetting().then((vib) => {
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
+    })
+  },
+
+  // 加载内置 + 已下载音效，合并为平铺列表
+  loadSounds() {
+    const that = this
+    const builtin = []
+    Object.keys(pages).forEach((key) => {
+      const cfg = pages[key]
+      if (cfg && cfg.name) {
+        builtin.push({
+          id: 'builtin_' + key,
+          ref: key,
+          kind: 'builtin',
+          name: cfg.name,
+          category: '内置'
+        })
+      }
+    })
+    that.builtin = builtin
+
+    audioSync.load((list) => {
+      const downloaded = (list || []).map((s) => ({
+        id: 'downloaded_' + s.id,
+        ref: s.id,
+        kind: 'downloaded',
+        name: s.name,
+        category: s.category || '其他'
+      }))
+      that.downloaded = downloaded
+      that.mergeAndBuild()
+    })
+  },
+
+  // 合并内置与已下载，构建分类并渲染
+  mergeAndBuild() {
+    const all = (this.builtin || []).concat(this.downloaded || [])
+    this.allSounds = all
+
+    const cats = ['内置']
+    ;(this.downloaded || []).forEach((s) => {
+      const c = s.category || '其他'
+      if (cats.indexOf(c) === -1) cats.push(c)
+    })
+    this.categories = cats
+
+    this.loading = false
+    this.applyFilter()
+    // 数据构建完成：等待页码恢复后统一执行「恢复滚动位置 + 取消加载遮罩」
+    this._tryFinishLoad()
+  },
+
+  // 分类 + 搜索 联合过滤
+  applyFilter() {
+    let list = this.allSounds || []
+    if (this.currentCat) {
+      list = list.filter((s) => s.category === this.currentCat)
+    }
+    const kw = (this.searchText || '').trim().toLowerCase()
+    if (kw) {
+      list = list.filter((s) => {
+        const name = (s.name || '').toLowerCase()
+        const cat = (s.category || '').toLowerCase()
+        return name.indexOf(kw) >= 0 || cat.indexOf(kw) >= 0
+      })
+    }
+    this.filteredSounds = list.slice()
+    // 过滤结果变化后刷新分页
+    this.updatePages()
+  },
+
+  // ===== 分页（每页 10 个音效） =====
+  updatePages() {
+    const total = Math.max(1, Math.ceil(this.filteredSounds.length / PAGE_SIZE))
+    this.totalPages = total
+    if (this.pageIndex > total - 1) this.pageIndex = total - 1
+    if (this.pageIndex < 0) this.pageIndex = 0
+    this.applyPage()
+  },
+
+  applyPage() {
+    const start = this.pageIndex * PAGE_SIZE
+    this.pageList = this.filteredSounds.slice(start, start + PAGE_SIZE)
+  },
+
+  prevPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.pageIndex <= 0) return
+    this.pageIndex--
+    this.applyPage()
+    settings.set('menu_builtin_page', String(this.pageIndex))
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  nextPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.pageIndex >= this.totalPages - 1) return
+    this.pageIndex++
+    this.applyPage()
+    settings.set('menu_builtin_page', String(this.pageIndex))
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  // 滚动到页面最底部（翻页渲染完成后执行；超大 top 值由框架钳制到最大滚动量）
+  scrollToBottom() {
+    const that = this
+    this.$nextTick(() => {
+      const scrollEl = that.$element('mainScroll')
+      if (scrollEl) {
+        scrollEl.scrollTo({ top: 1000, behavior: 'instant' })
+      }
+    })
+  },
+
+  // 切换分类：重置页码并回到顶部
+  selectCategory(cat) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.currentCat = cat || ''
+    this.pageIndex = 0
+    this.applyFilter()
+    this.scrollTop()
+  },
+
+  // 点击音效：进入播放页（内置走 name，下载走 custom）
+  onSoundTap(item) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.resetSharedState()
+    let targetUri
+    if (item.kind === 'builtin') {
+      const standalonePages = { CSboom: '/pages/play/CSboom', Yaoyaolingxian: '/pages/play/Yaoyaolingxian' }
+      targetUri = standalonePages[item.ref] || ('/pages/play?name=' + item.ref)
+    } else {
+      targetUri = '/pages/play?custom=' + item.ref
+    }
+    settings.set('lastTargetPage', targetUri)
+    router.replace({ uri: targetUri, params: { ___PARAM_LAUNCH_FLAG___: 'clearTask' } })
+  },
+
+  // 重置共享播放状态（与旧菜单一致）
+  resetSharedState() {
+    settings.set('play_count', '0')
+    settings.set('is_locked', 'false')
+    settings.set('fixed_play_count', '0')
+    settings.set('group_locked', 'false')
+    settings.set('locked_group', '1')
+    settings.set('group_inner_index', '0')
+  },
+
+  // ===== 搜索框 =====
+  openKeyboard() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.keyboardHide = false
+    // 动态计算搜索框位置，滚动到搜索框位于安全区域
+    const that = this
+    this.$nextTick(() => {
+      const scrollEl = that.$element('mainScroll')
+      const searchEl = that.$element('searchRow')
+      if (scrollEl && searchEl) {
+        searchEl.getBoundingClientRect({
+          success: function(data) {
+            // data.top = 搜索框距视口顶部的距离
+            // 需要滚动到：当前滚动量 + 搜索框距视口顶部 - 安全边距
+            const safeMargin = 33
+            const target = that.scrollY + data.top - safeMargin
+            scrollEl.scrollTo({ top: Math.max(0, target), behavior: 'smooth' }) //instant无动画，smooth平滑滚动
+          },
+          fail: function() {
+            // 兜底：直接滚到顶部
+            scrollEl.scrollTo({ top: 0, behavior: 'instant' })
+          }
+        })
+      }
+    })
+  },
+
+  onScrollHandler(e) {
+    this.scrollY = e.scrollY || 0
+    // 节流持久化滚动位置（与旧菜单 menu.ux 共用 scroll_position 键）
+    settings.setThrottled('scroll_position', this.scrollY, 300)
+  },
+
+  // 数据 + 页码均恢复后，统一进入「恢复滚动 + 取消遮罩」阶段（仅首次进入执行一次）
+  _tryFinishLoad() {
+    if (!this._pageRestored || this._loadFinished) return
+    this._loadFinished = true
+    this._restoreScrollAndFinish()
+  },
+
+  // 恢复上次滚动位置；smooth 滚动完成后才取消加载遮罩（避免用户看到滚动过程）
+  _restoreScrollAndFinish() {
+    const that = this
+    this.$nextTick(() => {
+      const scrollEl = that.$element('mainScroll')
+      settings.get('scroll_position').then(function(data) {
+        if (data && scrollEl) {
+          scrollEl.scrollTo({ top: parseInt(data, 10), behavior: 'instant' })
+        }
+        // 等待 smooth 滚动动画完成（估算），再取消遮罩
+        //setTimeout(function() {
+          that.showLoadingMask = false
+        //}, 500)
+      })
+    })
+  },
+
+  // 滚动到顶部（切换分类/搜索时使用）
+  scrollTop() {
+    const that = this
+    this.$nextTick(() => {
+      const scrollEl = that.$element('mainScroll')
+      if (scrollEl) scrollEl.scrollTo({ top: 0, behavior: 'instant' })
+    })
+  },
+
+  // ★ 恢复上次页码（与旧菜单 menu.ux 共用 menu_builtin_page 键）
+  onReady() {
+    const that = this
+    settings.get('menu_builtin_page').then(function(data) {
+      if (data !== undefined && data !== null && data !== '') {
+        that.pageIndex = parseInt(data, 10) || 0
+        // 列表已构建则立即应用；否则由 mergeAndBuild→applyFilter→updatePages 应用
+        if (that.allSounds.length > 0) that.updatePages()
+      }
+      // 页码恢复完成（无论有无记录），允许进入「恢复滚动 + 取消遮罩」阶段
+      that._pageRestored = true
+      that._tryFinishLoad()
+    })
+  },
+
+  closeKeyboard() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.keyboardHide = true
+  },
+
+  clearSearch() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.searchText = ''
+    this.pageIndex = 0
+    this.applyFilter()
+    this.scrollTop()
+  },
+
+  // ===== 输入法事件（接口与 NEORUAA 对齐） =====
+  onInputComplete(evt) {
+    const content = evt && evt.detail && evt.detail.content
+    if (!content) return
+    this.searchText += content
+    this.pageIndex = 0
+    this.applyFilter()
+  },
+
+  onInputDelete() {
+    if (this.searchText.length > 0) {
+      this.searchText = this.searchText.slice(0, -1)
+      this.pageIndex = 0
+      this.applyFilter()
+    }
+  },
+
+  onInputKeyDown() {
+    // 按键预览：当前无需处理，保留接口
+  },
+
+  onInputVisibilityChange(evt) {
+    // 键盘显隐通知：保留接口
+  },
+
+    // ★ 自定义音频同步入口 ★
+  goCustomAudio() {
+    if (this.vibrationEnabled) {
+      vibrator.vibrate({ mode: this.vibrationMode })
+    }
+    router.replace({ uri: '/pages/menu/custom' })
+  },
+
+  // 联网下载入口：通过 loading.ux 中央路由，由开关决定跳转新版/旧版商店
+  goGithubDownload() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.push({ uri: '/pages/start/loading', params: { target: 'download' } })
+  },
+
+  onBackPress() {
+    // 加载遮罩显示期间禁止返回（优先于收键盘）
+    if (this.showLoadingMask) {
+      prompt.showToast({ message: '正在加载，请稍候', duration: 1000 })
+      return true
+    }
+    // 键盘展开时禁止系统返回，改为收起键盘
+    if (!this.keyboardHide) {
+      this.closeKeyboard()
+      return true
+    }
+    router.replace({ uri: '/pages/start/loading' })
+    return true
+  },
+
+  goBack() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    // 加载遮罩显示期间禁止返回
+    if (this.showLoadingMask) {
+      prompt.showToast({ message: '正在加载，请稍候', duration: 1000 })
+      return
+    }
+    router.replace({ uri: '/pages/start/loading' })
+  }
+}
+</script>

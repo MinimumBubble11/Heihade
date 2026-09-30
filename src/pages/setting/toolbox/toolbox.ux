@@ -1,0 +1,292 @@
+<template>
+  <!-- 根容器：stack 实现层叠布局，承载底部固定返回按钮 -->
+  <stack class="root-stack">
+    <!-- 滚动内容（双形态安全区由媒体查询控制） -->
+    <scroll class="toolbox-page" scroll-y="true" bounces="true">
+      <text class="title">测试工具箱</text>
+      <text class="subtitle">选择要使用的功能</text>
+
+      <!-- 功能卡片①：网络下载（长按激活后连点 7 下触发，全程无震动） -->
+      <div class="tool-item" @longpress="armNote" onclick="onNoteTap">
+        <div class="tool-info">
+          <text class="tool-name">注意事项</text>
+          <text class="tool-desc">测试工具导致的问题作者不会负责，请不要随意使用</text>
+        </div>
+        <text class="tool-arrow"></text>
+      </div>
+
+      <!-- 功能卡片②：传感器检测 -->
+      <div class="tool-item" onclick="goSensorTest">
+        <div class="tool-info">
+          <text class="tool-name">传感器检测</text>
+          <text class="tool-desc">查看实时加速度与触发数据</text>
+        </div>
+        <text class="tool-arrow">›</text>
+      </div>
+
+      <!-- 功能卡片③：跳转启动页 -->
+      <div class="tool-item" onclick="goTostart">
+        <div class="tool-info">
+          <text class="tool-name">跳转启动页</text>
+          <text class="tool-desc">启动页动画测试</text>
+        </div>
+        <text class="tool-arrow">›</text>
+      </div>
+      <!-- 功能卡片④：网络连接设置 -->
+      <div class="tool-item" onclick="goConnectionSettings">
+        <div class="tool-info">
+          <text class="tool-name">网络连接测试</text>
+          <text class="tool-desc">选择下载连接方式(未完成)</text>
+        </div>
+        <text class="tool-arrow">›</text>
+      </div>
+      <!-- 功能卡片⑤：新版音效菜单开关（样式模仿 setting.ux） -->
+      <div class="tool-item" onclick="toggleMenuNeo">
+        <div class="tool-info">
+          <text class="tool-name">新版音效菜单</text>
+          <text class="tool-desc">进入音效菜单时跳转到新版菜单</text>
+        </div>
+        <image class="tool-switch" src="{{ useMenuNeo ? '/common/images/true.png' : '/common/images/false.png' }}" />
+      </div>
+
+      <!-- 功能卡片⑥：新版音效商店开关 -->
+      <div class="tool-item" onclick="toggleGithubNeo">
+        <div class="tool-info">
+          <text class="tool-name">新版音效商店</text>
+          <text class="tool-desc">菜单「联网下载」跳转到新版音效商店</text>
+        </div>
+        <image class="tool-switch" src="{{ useGithubNeo ? '/common/images/true.png' : '/common/images/false.png' }}" />
+      </div>      <text class="tool-name">  </text>
+      <div class="bottom-space"></div>
+    </scroll>
+
+    <!-- 底部固定返回按钮 -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+    </div>
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: #000000;
+}
+
+.toolbox-page {
+  width: 100%;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+  margin-top: 8px;
+}
+
+/* 圆屏：上下 10% + 左右 7-8% 安全区，避免圆角裁切 */
+@media (shape: circle) {
+  .toolbox-page { padding: 35px 10px }
+}
+
+/* 方屏：小边距即可 */
+@media (shape: rect) {
+  .toolbox-page { padding: 30px 0}
+}
+
+.title {
+  font-size: 18dp;
+  color: #4ccfff;
+  font-weight: bold;
+  margin-bottom: 4dp;
+}
+
+.subtitle {
+  font-size: 12dp;
+  color: #888888;
+  margin-bottom: 16dp;
+}
+
+.tool-item {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  padding-right: 14px;
+  padding-bottom: 12px;
+  padding-left: 14px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+  background-color: #222222;
+  border-radius: 12px;
+}
+
+.tool-info {
+  flex-direction: column;
+  flex: 1;
+}
+
+.tool-name {
+  font-size: 16dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.tool-desc {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 3dp;
+}
+
+.tool-arrow {
+  font-size: 20dp;
+  color: #4ccfff;
+  margin-left: 8dp;
+}
+
+.tool-switch {
+  width: 40dp;
+  object-fit: contain;
+  margin-left: 8dp;
+}
+
+.bottom-space {
+  width: 100%;
+  height: 30px;
+}
+
+/* 返回按钮：与项目其他页面（menu/setting/custom 等）保持一致的定位方式，
+   position:absolute 不设 top/bottom，固定悬浮在顶部 */
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  height: 35dp;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-button-fixed {
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #cccccc;
+}
+</style>
+
+<script>
+import router from '@system.router'
+import vibrator from '@system.vibrator'
+import vibration from '../../../common/vibrate'
+import settings from '../../../common/settings'
+
+export default {
+  private: {
+    // 震动开关与模式，onInit 从 storage 读取并覆盖
+    vibrationEnabled: true,
+    vibrationMode: 'short',
+    // 新版音效菜单开关：开启后进入旧菜单 pages/menu 时自动跳转到新版 pages/menu/menuNeo
+    useMenuNeo: true,
+    // 新版音效商店开关：开启后「联网下载」跳转到新版商店 pages/menu/github/githubNeo
+    useGithubNeo: true,
+    // 注意事项按钮：长按激活后连点 7 下触发（全程无震动）
+    noteArmed: false,
+    noteTapCount: 0,
+    noteLastTapTime: 0
+  },
+
+  onInit() {
+    vibration.loadSetting().then((vib) => {
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
+    })
+    this.loadMenuNeoSwitch()
+    this.loadGithubNeoSwitch()
+  },
+
+  // 读取新版音效菜单开关状态（未设置过默认开启）
+  loadMenuNeoSwitch() {
+    settings.get('use_menu_neo', 'true').then((data) => {
+      this.useMenuNeo = (data === 'true' || data === true)
+    })
+  },
+
+  // 读取新版音效商店开关状态（未设置过默认开启）
+  loadGithubNeoSwitch() {
+    settings.get('use_github_neo', 'true').then((data) => {
+      this.useGithubNeo = (data === 'true' || data === true)
+    })
+  },
+
+  // 切换新版音效菜单开关并持久化（样式模仿 setting.ux 图片开关）
+  toggleMenuNeo() {
+    this.useMenuNeo = !this.useMenuNeo
+    settings.set('use_menu_neo', String(this.useMenuNeo))
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+  },
+
+  // 切换新版音效商店开关并持久化
+  toggleGithubNeo() {
+    this.useGithubNeo = !this.useGithubNeo
+    settings.set('use_github_neo', String(this.useGithubNeo))
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+  },
+
+  // 物理返回键：返回上一页
+  onBackPress() {
+    router.back()
+    return true
+  },
+
+  goBack() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.back()
+  },
+
+  // 功能①：注意事项——长按激活（仅激活，不震动）
+  armNote() {
+    this.noteArmed = true
+    this.noteTapCount = 0
+    this.noteLastTapTime = 0
+  },
+
+  // 功能①：注意事项——长按激活后连点 7 下触发跳转（全程无震动）
+  onNoteTap() {
+    if (!this.noteArmed) return
+    const now = Date.now()
+    // 两次点击间隔超过 700ms 则重置计数（与设置页连点口径一致）
+    if (now - this.noteLastTapTime > 700) {
+      this.noteTapCount = 0
+    }
+    this.noteTapCount++
+    this.noteLastTapTime = now
+    if (this.noteTapCount >= 7) {
+      this.noteArmed = false
+      this.noteTapCount = 0
+      router.push({ uri: 'pages/setting/toolbox/download' })
+    }
+  },
+
+  // 功能②：跳转传感器检测页（原测试页）
+  goSensorTest() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.push({ uri: '/pages/setting/toolbox/test' })
+  },
+
+  goTostart() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.clear()
+    router.replace({ uri: '/pages/start' })
+  },
+
+  // 功能④：跳转网络连接设置页
+  goConnectionSettings() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.push({ uri: '/pages/menu/github/connection' })
+  }
+}
+</script>

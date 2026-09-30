@@ -1,0 +1,792 @@
+<import name="transferoverlay" src="../../../components/TransferOverlay"></import>
+
+<template>
+  <!-- 根容器：stack 实现层叠布局，承载底部固定返回按钮 -->
+  <stack class="root-stack">
+    <!-- 滚动内容（双形态安全区由媒体查询控制） -->
+    <scroll id="mainScroll" class="page" scroll-y="true" bounces="true">
+      <!-- 标题行：标题 + 刷新按钮 + 设置按钮 -->
+      <div class="title-row">
+        <text class="title">在线下载(github.io)</text>
+        <div class="title-refresh" onclick="refreshCatalog">
+          <image class="refresh-icon" src="/common/images/restart.png"></image>
+        </div>
+        <div class="title-refresh" onclick="openSettings">
+          <image class="refresh-icon" src="/common/images/setting.png"></image>
+        </div>
+      </div>
+
+      <!-- 连接工具条：自动换位 / 连接方式 / 重置 
+      <div class="toolbar">
+        <div class="tool-btn {{ autoSwitchEnabled ? 'active' : '' }}" onclick="toggleAutoSwitch">
+          <text class="tool-text">自动换位:{{ autoSwitchEnabled ? '开' : '关' }}</text>
+        </div>
+        <div class="tool-btn" onclick="goConnectionSettings">
+          <text class="tool-text">{{ connectionModeName }}</text>
+        </div>
+        <div class="tool-btn" onclick="resetConnection">
+          <text class="tool-text">重置</text>
+        </div>
+      </div>
+      -->
+
+      <!-- 分类筛选：横向滚动（全部 + 各分类） -->
+      <scroll class="cat-scroll" scroll-x="{{true}}" bounces="true">
+        <div class="cat-row">
+          <div class="cat-item {{ currentCat === '' ? 'active' : '' }}" onclick="selectCategory('')">
+            <text class="cat-text">全部</text>
+          </div>
+          <div class="cat-item {{ currentCat === $item ? 'active' : '' }}" for="{{ categories }}" tid="cat" onclick="selectCategory($item)">
+            <text class="cat-text">{{ $item }}</text>
+          </div>
+        </div>
+      </scroll>
+
+      <!-- 加载状态 -->
+      <text if="{{ loading }}" class="loading-text">加载武器目录...</text>
+
+      <!-- 加载失败（可重试） -->
+      <div if="{{ loadError }}" class="error-box">
+        <text class="error-title">加载失败</text>
+        <text class="error-hint">{{ loadErrorText }}</text>
+        <input class="retry-btn" type="button" value="重试" onclick="retryLoad" />
+      </div>
+
+      <!-- 武器列表（分页：name + 音频数量 + 描述/作者，不显示分类） -->
+      <div class="weapon-list">
+        <div class="weapon-item" for="{{ pageWeapons }}" tid="id" onclick="onWeaponTap($item)">
+          <div class="weapon-info">
+            <text class="weapon-name">{{ $item.name }}</text>
+            <text class="weapon-meta">{{ $item.audioCount }} 个音频{{ $item.downloaded ? ' · 已下载' : '' }}{{ $item.playMode === 2 ? ' · Combo' : '' }}</text>
+            <text class="weapon-desc" if="{{ $item.description }}">{{ $item.description }}</text>
+            <text class="weapon-author" if="{{ $item.author }}">来源：{{ $item.author }}</text>
+          </div>
+          <text class="weapon-status">{{ $item.downloaded ? '√' : '↓' }}</text>
+        </div>
+      </div>
+
+      <!-- 空状态：无武器 / 分类无结果 -->
+      <div if="{{ weapons.length === 0 && !loading && !loadError }}" class="empty-state">
+        <text class="empty-title">暂无可用武器</text>
+      </div>
+      <div if="{{ weapons.length > 0 && filtered.length === 0 && !loading && !loadError }}" class="empty-state">
+        <text class="empty-title">该分类暂无武器</text>
+      </div>
+
+      <!-- 翻页栏 -->
+      <div class="pager" if="{{ pageWeapons.length > 0 }}">
+        <input class="page-btn" type="button" value="&lt;" onclick="prevPage" />
+        <text class="page-num">{{ pageIndex + 1 }}/{{ totalPages }}</text>
+        <input class="page-btn" type="button" value="&gt;" onclick="nextPage" />
+      </div>
+
+      <div class="bottom-space"></div>
+    </scroll>
+
+    <!-- 下载进度 + 待下载队列：浮层由 transferoverlay 组件承载，定位由本层负责 -->
+    <div class="download-overlay">
+      <transferoverlay source="download" @download-end="refreshDownloadState"></transferoverlay>
+    </div>
+
+    <!-- 固定返回按钮（顶部悬浮，与其他页面一致） -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+    </div>
+
+    <!-- 设置面板（自绘，Vela 无原生对话框） -->
+    <div if="{{ settingsVisible }}" class="settings-overlay">
+      <div class="settings-dialog">
+        <text class="settings-title">下载设置</text>
+        <div class="settings-item" onclick="toggleShowDownloaded">
+          <text class="settings-label">显示已下载音效</text>
+          <image class="settings-switch" src="{{ showDownloaded ? '/common/images/true.png' : '/common/images/false.png' }}" />
+        </div>
+        <text class="settings-hint">关闭后列表不再显示已下载的音效</text>
+        <input class="settings-btn" type="button" value="完成" onclick="closeSettings" />
+      </div>
+    </div>
+
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: #000000;
+}
+
+.page {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+}
+
+/* 圆屏：上下 10% + 左右 7-8% 安全区，避免圆角裁切 */
+@media (shape: circle) {
+  .page { padding: 35px 10px; }
+}
+
+/* 方屏：小边距即可 */
+@media (shape: rect) {
+  .page { padding: 30px 0; }
+}
+
+.title-row {
+  width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 6dp;
+}
+
+.title {
+  font-size: 17dp;
+  color: #4ccfff;
+  font-weight: bold;
+}
+
+.title-refresh {
+  width: 24px;
+  height: 24px;
+  border-radius: 13px;
+  background-color: #333;
+  justify-content: center;
+  align-items: center;
+  border: 2px solid #555;
+  margin-left: 10px;
+}
+
+.refresh-icon {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+}
+
+/* 设置面板（自绘弹层） */
+.settings-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+.settings-dialog {
+  width: 82%;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 12px;
+  background-color: #1a1a1a;
+  border-radius: 14px;
+  border: 2px solid #333333;
+}
+
+.settings-title {
+  font-size: 15dp;
+  color: #4ccfff;
+  font-weight: bold;
+  margin-bottom: 8dp;
+}
+
+.settings-item {
+  width: 100%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px;
+}
+
+.settings-label {
+  font-size: 14dp;
+  color: #ffffff;
+}
+
+.settings-switch {
+  width: 24dp;
+  height: 24dp;
+  object-fit: contain;
+}
+
+.settings-hint {
+  width: 100%;
+  font-size: 11dp;
+  color: #888888;
+  margin-top: 2dp;
+  margin-bottom: 12dp;
+}
+
+.settings-btn {
+  width: 70%;
+  height: 32dp;
+  border-radius: 16dp;
+  background-color: #1d5c73;
+  font-size: 14dp;
+  color: #4ccfff;
+}
+
+@media (shape: circle) {
+  .settings-dialog {
+    width: 62%;
+  }
+}
+
+/* 连接工具条 */
+.toolbar {
+  width: 92%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-top: 2dp;
+  margin-bottom: 2dp;
+}
+
+.tool-btn {
+  height: 24dp;
+  padding-left: 10px;
+  padding-right: 10px;
+  border-radius: 12dp;
+  background-color: #222222;
+  justify-content: center;
+  align-items: center;
+  margin-left: 3dp;
+  margin-right: 3dp;
+  border: 2px solid transparent;
+}
+
+.tool-btn.active {
+  border-color: #4ccfff;
+  background-color: #2a2a2a;
+}
+
+.tool-text {
+  font-size: 11dp;
+  color: #cccccc;
+}
+
+/* 分类筛选条 */
+.cat-scroll {
+  width: 92%;
+  margin-top: 2dp;
+  margin-bottom: 2dp;
+}
+
+.cat-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.cat-item {
+  height: 26dp;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-radius: 13dp;
+  background-color: #222222;
+  justify-content: center;
+  align-items: center;
+  margin-right: 6dp;
+  border: 2px solid transparent;
+}
+
+.cat-item.active {
+  border-color: #4ccfff;
+  background-color: #2a2a2a;
+}
+
+.cat-text {
+  font-size: 12dp;
+  color: #cccccc;
+}
+
+.loading-text {
+  font-size: 13dp;
+  color: #888888;
+  margin-top: 40dp;
+}
+
+.error-box {
+  width: 90%;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 40dp;
+}
+
+.error-title {
+  font-size: 16dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.error-hint {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 6dp;
+}
+
+.retry-btn {
+  width: 100dp;
+  height: 30dp;
+  border-radius: 15dp;
+  background-color: #222222;
+  font-size: 13dp;
+  color: #4ccfff;
+  margin-top: 12dp;
+}
+
+/* 武器列表 */
+.weapon-list {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.weapon-item {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+  background-color: #222222;
+  border-radius: 12px;
+}
+
+.weapon-info {
+  flex-direction: column;
+  flex: 1;
+}
+
+.weapon-name {
+  font-size: 16dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.weapon-meta {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 3dp;
+}
+
+.weapon-desc {
+  font-size: 11dp;
+  color: #777777;
+  margin-top: 2dp;
+}
+
+.weapon-author {
+  font-size: 11dp;
+  color: #555555;
+  margin-top: 1dp;
+}
+
+.weapon-status {
+  font-size: 18dp;
+  color: #4ccfff;
+  margin-left: 8dp;
+}
+
+.empty-state {
+  width: 100%;
+  align-items: center;
+  margin-top: 60dp;
+}
+
+.empty-title {
+  font-size: 14dp;
+  align-items: center;
+  color: #888888;
+}
+
+/* 翻页栏 */
+.pager {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+@media (shape:circle){
+  .pager{
+    width: 60%;
+  }
+}
+
+.page-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 100%;
+  border: 2px solid #333333;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #4ccfff;
+}
+
+.page-num {
+  font-size: 15px;
+  color: #ffffff;
+}
+
+.bottom-space {
+  width: 100%;
+  height: 30px;
+}
+
+/* 下载进度：置顶悬浮屏幕中央 */
+.download-overlay {
+  position: absolute;
+  top: 38%;
+  left: 0;
+  width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 返回按钮：与项目其他页面保持一致（position:absolute 不设 top/bottom，顶部悬浮） */
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  height: 35dp;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-button-fixed {
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #cccccc;
+}
+</style>
+
+<script>
+import router from '@system.router'
+import vibrator from '@system.vibrator'
+import prompt from '@system.prompt'
+import downloadModule from '../../../common/download'
+import audioSync from '../../../common/audiosync'
+import dlManager from '../../../common/downloadmanager'
+import vibration from '../../../common/vibrate'
+import settings from '../../../common/settings'
+
+// 每页显示武器数量（平铺过多易崩溃，故分页渲染）
+const PAGE_SIZE = 20
+// 数据源：GitHub 三仓库分发（Heihade_index 定时生成 catalog.json）
+const GITHUB_CATALOG_URL = 'https://MinimumBubble11.github.io/Heihade_index/catalog.json'
+
+export default {
+  private: {
+    vibrationEnabled: true,
+    vibrationMode: 'short',
+    loading: true,
+    loadError: false,
+    loadErrorText: '',
+    weapons: [],
+    filtered: [],
+    pageWeapons: [],
+    pageIndex: 0,
+    totalPages: 1,
+    // 分类筛选
+    categories: [],
+    currentCat: '',
+    // 连接方式状态（工具条显示）
+    autoSwitchEnabled: true,
+    connectionModeName: '域名直连',
+    // 设置面板：是否显示已下载音效（关闭后列表仅显示未下载）
+    settingsVisible: false,
+    showDownloaded: true
+  },
+
+  onInit() {
+    this.loadSettings()
+    this.loadShowDownloaded()
+    audioSync.init()
+    this.loadCatalog()
+  },
+
+  // 页面重新可见：恢复全局下载状态；后台可能已完成下载，刷新已下载标记
+  onShow() {
+    // 后台可能已完成下载：无进行中任务时刷新已下载标记
+    if (!dlManager.isDownloading()) {
+      this.refreshDownloadState()
+    }
+  },
+
+  loadSettings() {
+    vibration.loadSetting().then((vib) => {
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
+    })
+  },
+
+  // 读取「显示已下载音效」设置（默认显示）
+  loadShowDownloaded() {
+    const that = this
+    settings.get('show_downloaded_weapons', 'true').then((data) => {
+      that.showDownloaded = (data !== 'false')
+    })
+  },
+
+  // 打开设置面板
+  openSettings() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.settingsVisible = true
+  },
+
+  // 关闭设置面板
+  closeSettings() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.settingsVisible = false
+  },
+
+  // 切换「显示已下载音效」并持久化（保持当前页码立即生效）
+  toggleShowDownloaded() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.showDownloaded = !this.showDownloaded
+    settings.set('show_downloaded_weapons', String(this.showDownloaded))
+    prompt.showToast({
+      message: this.showDownloaded ? '已显示已下载音效' : '已隐藏已下载音效',
+      duration: 1200
+    })
+    this.applyFilter(true)
+  },
+
+  // 手动刷新目录（下载/加载中禁止重复触发，避免并发请求）
+  refreshCatalog() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (dlManager.isDownloading()) {
+      prompt.showToast({ message: '请等待当前下载完成', duration: 1500 })
+      return
+    }
+    if (this.loading) {
+      prompt.showToast({ message: '正在加载中...', duration: 1000 })
+      return
+    }
+    prompt.showToast({ message: '正在刷新...', duration: 1000 })
+    this.loadCatalog()
+  },
+
+  // 加载失败后手动重试
+  retryLoad() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.loading) return
+    this.loadCatalog()
+  },
+
+  // 拉取 GitHub 武器目录并渲染（三级回退：域名 → jsdelivr CDN → IP 直连）
+  loadCatalog() {
+    const that = this
+    this.loading = true
+    this.loadError = false
+    this.loadErrorText = ''
+    
+    // 使用三级回退加载 catalog
+      downloadModule.fetchCatalogWithFallback((list, finalLayer, lastErrorCode) => {
+        that.loading = false
+        // 无论成败，刷新工具条连接状态（此时连接设置已加载完成）
+        that.refreshConnectionState()
+        if (!list) {
+          that.loadError = true
+          // 检查错误码 204，显示网络未连接提示
+          if (lastErrorCode === 204) {
+            that.loadErrorText = '网络未连接，请检查网络设置'
+          } else {
+            that.loadErrorText = '所有访问方式均失败，请检查网络'
+          }
+          console.error('[github] 所有访问方式均失败, lastErrorCode=' + lastErrorCode)
+      }
+      
+      // 记录最终使用的层级（用于调试）
+      console.log(`[github] catalog 加载成功，使用层级: ${finalLayer}`)
+      
+      // 根据层级设置 IP 回退标志（用于后续下载）
+      if (finalLayer === 3) {
+        downloadModule.setIpFallback(true)
+      } else {
+        downloadModule.setIpFallback(false)
+      }
+      
+      that.weapons = (list || []).map((w) => {
+        w.downloaded = false
+        return w
+      })
+      
+      // 提取去重分类（保持 catalog 顺序）
+      const cats = []
+      ;(that.weapons || []).forEach((w) => {
+        const c = w.category || 'other'
+        if (cats.indexOf(c) === -1) cats.push(c)
+      })
+      that.categories = cats
+      that.filtered = that.weapons.slice()
+      that.pageIndex = 0
+      that.updatePages()
+      that.refreshDownloadState()
+    }, GITHUB_CATALOG_URL)
+  },
+
+  // 从 audiosync 清单标记已下载武器
+  refreshDownloadState() {
+    const that = this
+    audioSync.load((list) => {
+      const ids = {}
+      ;(list || []).forEach((x) => { ids[x.id] = true })
+      that.weapons = (that.weapons || []).map((w) => {
+        w.downloaded = !!ids[w.id]
+        return w
+      })
+      // 同步已下载标记后重新按当前关键词过滤（保持当前页码，避免下载完成跳回第一页）
+      that.applyFilter(true)
+    })
+  },
+
+  // ===== 分页 =====
+  updatePages() {
+    this.totalPages = Math.max(1, Math.ceil(this.filtered.length / PAGE_SIZE))
+    if (this.pageIndex > this.totalPages - 1) this.pageIndex = this.totalPages - 1
+    this.applyPage()
+  },
+
+  applyPage() {
+    const start = this.pageIndex * PAGE_SIZE
+    this.pageWeapons = this.filtered.slice(start, start + PAGE_SIZE)
+  },
+
+  // ===== 分类筛选（本地过滤，不请求网络） =====
+  selectCategory(cat) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.currentCat = cat || ''
+    this.applyFilter()
+  },
+
+  // keepPage=true 时保持当前页码（下载完成刷新等场景）；否则重置到第一页（分类/搜索切换）
+  applyFilter(keepPage) {
+    let list = this.weapons
+    if (this.currentCat) {
+      list = list.filter((w) => (w.category || 'other') === this.currentCat)
+    }
+    // 按设置过滤：关闭「显示已下载音效」后仅保留未下载的
+    if (!this.showDownloaded) {
+      list = list.filter((w) => !w.downloaded)
+    }
+    this.filtered = list.slice()
+    if (!keepPage) this.pageIndex = 0
+    this.updatePages()
+  },
+
+  prevPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.pageIndex <= 0) return
+    this.pageIndex--
+    this.applyPage()
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  nextPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.pageIndex >= this.totalPages - 1) return
+    this.pageIndex++
+    this.applyPage()
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  // 滚动到页面最底部（翻页渲染完成后执行；超大 top 值由框架钳制到最大滚动量）
+  scrollToBottom() {
+    const that = this
+    this.$nextTick(() => {
+      const scrollEl = that.$element('mainScroll')
+      if (scrollEl) {
+        scrollEl.scrollTo({ top: 999999, behavior: 'instant' })
+      }
+    })
+  },
+
+  // 点击武器：已下载提示；否则交给全局下载管理器（空闲立即下载 / 下载中入队）
+  onWeaponTap(item) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (item.downloaded) {
+      prompt.showToast({ message: '该音效已下载', duration: 1500 })
+      return
+    }
+    const r = dlManager.enqueue(item)
+    if (r === 'downloading') {
+      prompt.showToast({ message: '该音效正在下载中', duration: 1500 })
+    } else if (r === 'duplicate') {
+      prompt.showToast({ message: '该音效已在队列中', duration: 1200 })
+    } else if (r === 'full') {
+      prompt.showToast({ message: '下载队列已满（最多3个）', duration: 1500 })
+    } else if (r === 'queued') {
+      prompt.showToast({ message: '已加入下载队列（' + dlManager.getState().queue.length + '/3）', duration: 1200 })
+    }
+  },
+
+  // 物理返回键：下载已提升到全局后台进行，可自由返回（下载不中断）
+  onBackPress() {
+    router.back()
+    return true
+  },
+
+  goBack() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.back()
+  },
+
+  // ===== 连接工具条 =====
+
+  // 刷新工具条显示的连接方式与自动换位状态
+  refreshConnectionState() {
+    this.autoSwitchEnabled = downloadModule.isAutoSwitchEnabled()
+    const mode = downloadModule.getConnectionMode()
+    const modeNames = { domain: '域名直连', cdn: '镜像网站', ip: 'IP 直连' }
+    this.connectionModeName = modeNames[mode] || '域名直连'
+  },
+
+  // 切换自动换位（自动回退）
+  toggleAutoSwitch() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.autoSwitchEnabled = !this.autoSwitchEnabled
+    const that = this
+    downloadModule.setAutoSwitch(this.autoSwitchEnabled, () => {
+      prompt.showToast({ message: '自动换位已' + (that.autoSwitchEnabled ? '开启' : '关闭'), duration: 1000 })
+      // 若当前处于加载失败状态，切换后自动重试
+      if (that.loadError && !that.loading) {
+        that.loadCatalog()
+      }
+    })
+  },
+
+  // 跳转连接设置页
+  goConnectionSettings() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.push({ uri: '/pages/menu/github/connection' })
+  },
+
+  // 重置连接设置为默认并重新加载
+  resetConnection() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    const that = this
+    downloadModule.resetConnectionSettings(() => {
+      that.refreshConnectionState()
+      prompt.showToast({ message: '已重置连接设置', duration: 1000 })
+      if (!that.loading && !dlManager.isDownloading()) {
+        that.loadCatalog()
+      }
+    })
+  }
+}
+</script>

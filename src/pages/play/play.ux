@@ -1,0 +1,911 @@
+<template>
+  <scroll class="scroll-root" scroll-y="true" bounces="false">
+    <div class="page">
+      <!-- 背景层：图片 / 文字 -->
+      <image if="{{ (display === 'image' && !imgError) || display === 'colortext' }}" class="bg-image" src="{{ cfg.image }}" style="opacity: {{ bgImageOpacity }};" onerror="onImgError"></image>
+      <text if="{{ display === 'text' || (display === 'image' && imgError) }}" class="bg-text" style="opacity: {{ bgTextOpacity }};">{{ cfg.bgText || cfg.name }}</text>
+
+      <!-- 进度条 + 锁定（仅多段音效）：长按锁定整个播放 -->
+      <div if="{{ showProgress }}" class="progress-wrapper" @longpress="toggleLock">
+        <div class="progress-area">
+          <progress class="play-progress" percent="{{ progressPercent }}" style="color: {{ progressColor }};"></progress>
+          <div class="progress-info">
+            <text class="progress-text">{{ progressText }}</text>
+            <image class="lock-status" src="{{ isLocked ? '/common/images/lock.png' : '/common/images/unlock.png' }}" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 中心层：图片 / 文字 / 彩色文字 -->
+      <image if="{{ display === 'image' && !imgError }}" class="center-image" src="{{ cfg.image }}" onclick="onImageClick" onerror="onImgError" @longpress="onCenterLongPress"></image>
+      <text if="{{ display === 'text' || (display === 'image' && imgError) }}" class="center-text" onclick="onImageClick" @longpress="onCenterLongPress">{{ cfg.centerText || cfg.name }}</text>
+      <div if="{{ display === 'colortext' }}" class="center-image center-text-row" onclick="onImageClick" @longpress="onCenterLongPress">
+        <block for="{{ centerChars }}">
+          <text class="center-text" style="color: {{ $item.color }}">{{ $item.char }}</text>
+        </block>
+      </div>
+
+      <div class="button-bar">
+        <div class="btn-setting" onclick="goToModeSelect"><image class="setting-icon" src="/common/images/手势.png"></image></div>
+        <div class="btn-setting" onclick="goToMenu"><image class="setting-icon" src="/common/images/more.png"></image></div>
+        <div class="btn-setting" onclick="goToSetting"><image class="setting-icon" src="/common/images/setting.png"></image></div>
+      </div>
+
+      <!-- 挂机遮罩：半透明遮罩 + CSS 旋转 loading（点击任意位置退出） -->
+      <div if="{{ isHangup }}" class="hangup-mask" @click="onMaskClick">
+        <div class="hangup-row">
+          <image class="hangup-spinner" src="/common/images/loading.png"></image>
+          <text class="hangup-title">正在挂机</text>
+        </div>
+        <text class="hangup-hint">点击退出</text>
+      </div>
+    </div>
+  </scroll>
+</template>
+
+<style>
+.scroll-root { width: 100%; height: 100%; background-color: #000000; }
+.page { width: 100%; min-height: 100%; flex-direction: column; justify-content: center; align-items: center; background-color: #000000; padding: 20px 0; position: relative; overflow: hidden; }
+
+.bg-image { position: absolute; height: 200dp; width: 200dp; transition: opacity 300ms ease; object-fit: contain; }
+.bg-text { position: absolute; font-size: 30px; text-align: center; font-weight: bold; color: #595959; transition: opacity 300ms ease; z-index: 0; width: 70%; }
+
+.progress-wrapper { width: 70%; background-color: #333333; border-radius: 100%; padding: 5px 15px; margin-bottom: 0px; flex-direction: column; align-items: center; z-index: 1; opacity: 0.9; }
+.progress-area { width: 100%; flex-direction: column; align-items: center; }
+.play-progress { width: 90%; height: 7dp; color: #4ccfff; layer-color: #444444; stroke-width: 5dp; margin: 1px; }
+.progress-info { width: 100%; flex-direction: row; justify-content: space-between; align-items: center; }
+.progress-text { color: #ffffff; font-size: 13px; }
+.group-text { color: #ffffff; font-size: 13px;}
+.lock-status { height: 16px;object-fit: contain;}
+
+.center-image { height: 68px; object-fit: contain; margin: 2%; z-index: 1; }
+.center-text-row { flex-direction: row; justify-content: center; align-items: center; }
+.center-text { font-size: 32px; text-align: center; font-weight: bold; padding: 10px 5px; }
+
+.button-bar { flex-direction: row; justify-content: space-around; align-items: center; width: 80%; margin-top: 2px; z-index: 1; opacity: 0.9;}
+.btn-setting { width: 30px; height: 30px; justify-content: center; align-items: center; background-color: #333333; border-radius: 10px; }
+.setting-icon { width: 20px; height: 20px; }
+
+/* ===== 挂机遮罩 ===== */
+.hangup-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.65);
+  z-index: 2;
+}
+
+.hangup-spinner {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  transform-origin: 10px 10px;
+  animation-name: hangup-spin;
+  animation-duration: 1200ms;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+/* 加载动画与标题并排 */
+.hangup-row {
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.hangup-title {
+  margin-left: 6px;
+  font-size: 15px;
+  color: #4ccfff;
+}
+
+.hangup-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #888888;
+}
+
+@keyframes hangup-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+</style>
+
+<script>
+import sensor from '@system.sensor'
+import audio from '@system.audio'
+import brightness from '@system.brightness'
+import vibrator from '@system.vibrator'
+import router from '@system.router'
+import prompt from '@system.prompt'
+import pages from '../../common/pages'
+import audioSync from '../../common/audiosync'
+import vibration from '../../common/vibrate'
+import settings from '../../common/settings'
+
+// 长按补发 click 的守护窗口（ms）：长按进入挂机后，平台补发的 click 会落在遮罩上，
+// 常此窗口内吞掉，避免刚进入挂机就被立即退出
+const LONG_PRESS_GUARD_MS = 400
+
+// 挂机：冷却结束后用 audio.getPlayState 确认音频真的播完，再播下一段
+const HANGUP_STATE_POLL_MS = 150      // 播放状态查询间隔
+const HANGUP_MAX_STATE_WAIT_MS = 8000 // 状态等待上限（超时强制续播，防卡死）
+const HANGUP_AFTER_END_DELAY_MS = 1000 // 播放结束后固定延迟，再播下一段
+
+export default {
+  private: {
+    // 当前音效配置（来自 common/pages.js）
+    cfg: {},
+    display: 'image',
+    centerChars: [],
+    showProgress: false,
+
+    threshold: 20,
+    lastPlayTime: 0,
+    lastAbove: false,
+    playCount: 0,
+    isPlaying: false,
+    isSubscribed: false,
+    playTimer: null,
+    colorTimer: null,
+    vibrationEnabled: true,
+    vibrationMode: 'short',
+    mode: 'punch',
+    noCooldownEnabled: true,
+
+    bgImageOpacity: 0,
+    bgTextOpacity: 0,
+    progressPercent: 0,
+    progressText: '',
+    progressColor: '#4ccfff',
+    isLocked: false,
+    lockStatus: '解锁',
+    fixedPlayCount: 0,
+    currentPlayingIndex: 1,
+
+    coefficientMap: { punch: 33, sword: 35, gun: 35 },
+    lastPlayedIdx: 0,
+    imgError: false,
+
+    // 挂机（自动播放）
+    isHangup: false,
+    lastLongPressTime: 0,
+    hangupTimer: null
+  },
+
+  // ================= 生命周期 =================
+  async onInit() {
+    const name = this.name || ''
+    const customId = this.custom || ''
+    let cfg = null
+    // 自定义音频：从同步清单加载播放配置（含图片/多音频/模式）
+    if (customId) {
+      try {
+        cfg = await this.loadCustomConfig(customId)
+      } catch (e) {
+        console.error('自定义音频加载异常', e)
+        cfg = null
+      }
+    }
+    if (!cfg) cfg = pages[name] || pages.Quantou
+    // 自定义音效最终仍拿不到配置（重试失败）：弹窗提示后跳回菜单页，
+    // 不再用内置配置兜底继续播放（用户明确期望失败时回到菜单重新选择）
+    if (customId && (!cfg || cfg.id !== customId)) {
+      prompt.showToast({ message: '加载失败，返回菜单', duration: 1500 })
+      // 同步修正冷启动恢复目标：lastTargetPage 由菜单写入，若仍指向已失败
+      // 的自定义音效（如 /pages/play?custom=xxx），应用重启恢复时仍会再次
+      // 进入失败音效；此处改为菜单页，保证下次启动直接回到菜单
+      this.setStorage('lastTargetPage', '/pages/menu')
+      router.replace({ uri: '/pages/start/loading', params: { target: 'menu' } })
+      return
+    }
+    this.cfg = cfg
+    this.imgError = false
+    // 切换音效才重置播放序列；不切换（同一音效再次进入）保留上次进度与锁定状态。
+    // 冷启动重置由 start.ux 清除 last_audio_key 完成，此处视为首次进入 → 重置。
+    await this.checkAudioSwitch()
+    this.display = cfg.display || 'image'
+    this.showProgress = (cfg.type === 'sequence')
+    if (this.display === 'colortext' && cfg.centerText) {
+      const chars = cfg.centerText.split('')
+      const colors = cfg.textColors || []
+      this.centerChars = chars.map((c, i) => ({ char: c, color: colors[i] || '#ffffff' }))
+    }
+    // 音频自然播放结束时复位（自定义音频时长由插件估算，以实际播放结束为准）
+    audio.onended = () => {
+      // 停止播放器，防止其在文件结尾后自动重播结尾段
+      audio.stop()
+      this.isPlaying = false
+      // 平台已通知「自然播完」：供挂机循环零开销判定
+      this.markAudioEnded()
+      this.clearPlayTimer()
+      // 播放结束后立即预加载下一段，轮播切换零延迟
+      this.preloadNextAudio()
+    }
+    // 灵敏度/震动/序列进度等设置由 onShow 异步加载（fire-and-forget），
+    // 不阻塞首屏渲染，避免 storage 响应慢时出现"加载半天没反应"
+  },
+
+  // 加载自定义音频配置：最多尝试 3 次（1 次初始 + 2 次重试），每次尝试独立超时；
+  // 失败弹 toast 提示后自动重试，2 次重试仍失败则返回 null，由 onInit 弹窗并跳转五字真音
+  loadCustomConfig(id) {
+    const that = this
+    // 总尝试次数：1 次初始 + 2 次重试；单次尝试超时
+    const MAX_TRIES = 3
+    const TRY_TIMEOUT = 800
+    return new Promise((resolve) => {
+      let done = false
+      const finish = function(result) {
+        if (done) return
+        done = true
+        resolve(result)
+      }
+      let tries = 0
+      const tryOnce = function() {
+        // 页面已销毁：立即终止重试，避免异步回调作用于已销毁页面导致崩溃
+        if (that._destroyed) {
+          finish(null)
+          return
+        }
+        tries++
+        let settled = false
+        const onFail = function(reason) {
+          console.error('自定义音频配置' + reason + '，第 ' + tries + '/' + MAX_TRIES + ' 次')
+          if (tries >= MAX_TRIES) {
+            finish(null)
+            return
+          }
+          // 弹提示后自动重试（重试最多 2 次），间隔 800ms 给 storage 更多落盘时间
+          prompt.showToast({ message: '加载失败，重试 ' + tries + '/2', duration: 1000 })
+          setTimeout(tryOnce, 800)
+        }
+        const timer = setTimeout(function() {
+          if (settled) return
+          settled = true
+          onFail('超时')
+        }, TRY_TIMEOUT)
+        const onGot = function(cfg) {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          if (cfg) {
+            finish(cfg)
+            return
+          }
+          onFail('未找到')
+        }
+        try {
+          // getPlayConfigCached：内存含该 id 直接返回，否则重读 storage
+          audioSync.getPlayConfigCached(id, onGot)
+        } catch (e) {
+          console.error('加载自定义音频清单失败', e)
+          onFail('异常')
+        }
+      }
+      tryOnce()
+    })
+  },
+
+  onShow() {
+    this.setKeepScreenOn(true)
+    this.loadSettings()
+    // 预加载首段音频，让播放器提前加载/解码，首次触发即可立即出声
+    this.preloadAudio()
+    if (!this.isSubscribed) this.startAccelerometerListener()
+  },
+
+  onHide() {
+    this.setKeepScreenOn(false)
+    this.stopAccelerometerListener()
+    this.clearPlayTimer()
+    this.clearColorTimer()
+    audio.stop()
+    this.isPlaying = false
+    // 离开页面即退出挂机（不震动、不持久化）
+    this.isHangup = false
+    this.stopHangupLoop()
+  },
+
+  onDestroy() {
+    // 标记页面已销毁：阻断仍在排队的重试/异步回调，避免作用于已销毁页面
+    this._destroyed = true
+    this.stopAccelerometerListener()
+    this.clearPlayTimer()
+    this.clearColorTimer()
+    this.stopHangupLoop()
+    audio.onended = null
+    audio.stop()
+  },
+
+  // ================= 配置加载 =================
+  async loadSettings() {
+    try {
+      // 互不依赖的设置项并行读取（settings 内存缓存 + 批量），避免串行 storage 等待拖慢加载
+      const values = await settings.getMany([
+        'detect_mode',
+        'sensitivity_percent',
+        'no_cooldown_enabled'
+      ])
+      const modeVal = values[0]
+      const sensVal = values[1]
+      const noCooldownVal = values[2]
+
+      if (modeVal) this.mode = modeVal
+      const vib = await vibration.loadSetting()
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
+
+      let percent = sensVal ? parseInt(sensVal, 10) : 50
+      if (isNaN(percent) || percent < 0) percent = 0
+      if (percent > 100) percent = 100
+      this.threshold = this.calcThreshold(percent)
+
+      if (noCooldownVal !== null) {
+        this.noCooldownEnabled = (noCooldownVal === 'true' || noCooldownVal === true)
+      } else {
+        this.noCooldownEnabled = true
+      }
+
+      if (this.showProgress) {
+        await this.loadSequenceState()
+      }
+    } catch (e) { console.error('加载配置失败', e) }
+  },
+
+  // 当前音效的唯一标识：内置用 name，自定义用 custom_<id>（用于判断是否切换音效）
+  getAudioKey() {
+    if (this.custom) return 'custom_' + this.custom
+    return this.name || ''
+  },
+
+  // 切换音效才重置播放序列；不切换（同一音效退出再进）保留上次进度与锁定状态。
+  // 冷启动重置由 start.ux 清除 last_audio_key 完成，此时视为首次进入 → 重置。
+  async checkAudioSwitch() {
+    const key = this.getAudioKey()
+    if (!key) return
+    const prev = await this.getStorage('last_audio_key')
+    if (prev !== key) {
+      this.resetSequenceState()
+      this.setStorage('last_audio_key', key)
+    }
+  },
+
+  // 重置播放序列（内置/自定义音效统一入口：切换音效时从头开始）
+  resetSequenceState() {
+    const that = this
+    const resetVals = {
+      play_count: 0,
+      is_locked: 'false',
+      fixed_play_count: 0
+    }
+    Object.keys(resetVals).forEach(function(k) {
+      that.setStorage(k, String(resetVals[k]))
+    })
+    this.playCount = 0
+    this.isLocked = false
+    this.fixedPlayCount = 0
+    this.currentPlayingIndex = 0
+    this.progressPercent = 0
+    this.progressText = '0/' + (this.cfg ? (this.cfg.totalSteps || 0) : 0)
+  },
+
+  async loadSequenceState() {
+    const total = this.cfg.totalSteps
+    // 共享计数 / 锁定状态 / 固定计数 并行读取，避免串行等待
+    const [countVal, lockedVal, fixedVal] = await Promise.all([
+      this.getStorage('play_count'),
+      this.getStorage('is_locked'),
+      this.getStorage('fixed_play_count')
+    ])
+    if (countVal !== null) {
+      const restored = parseInt(countVal, 10)
+      this.playCount = (!isNaN(restored) && restored >= 0 && restored < total) ? restored : 0
+    } else {
+      this.playCount = 0
+    }
+
+    this.isLocked = (lockedVal === 'true')
+    if (fixedVal !== null) {
+      const fixed = parseInt(fixedVal, 10)
+      this.fixedPlayCount = (!isNaN(fixed) && fixed >= 0 && fixed < total) ? fixed : 0
+    } else {
+      this.fixedPlayCount = 0
+    }
+    this.lockStatus = this.isLocked ? '锁定' : '解锁'
+
+    this.updateProgressDisplay()
+  },
+
+  updateProgressDisplay() {
+    if (this.isLocked) {
+      this.currentPlayingIndex = this.fixedPlayCount + 1
+    } else {
+      this.currentPlayingIndex = this.playCount
+    }
+    this.progressPercent = this.currentPlayingIndex === 0 ? 0 : Math.round((this.currentPlayingIndex / this.cfg.totalSteps) * 100)
+    this.progressText = this.currentPlayingIndex + '/' + this.cfg.totalSteps
+  },
+
+  getStorage(key) {
+    return settings.get(key)
+  },
+
+  setStorage(key, value) {
+    settings.set(key, value)
+  },
+
+  calcThreshold(percent) {
+    const coeff = this.coefficientMap[this.mode] || 35
+    return Math.round(45 - (percent / 100) * coeff)
+  },
+
+  getAxisAndDirection(mode) {
+    switch (mode) {
+      case 'punch': return { axis: 'z', direction: 'positive' }
+      case 'sword': return { axis: 'x', direction: 'either' }
+      case 'gun': return { axis: 'y', direction: 'negative' }
+      default: return { axis: 'z', direction: 'positive' }
+    }
+  },
+
+  // ================= 加速度检测 =================
+  startAccelerometerListener() {
+    if (this.isSubscribed) return
+    sensor.subscribeAccelerometer({
+      interval: 'game',
+      callback: (ret) => { this.checkAccelerationTrigger(ret.x, ret.y, ret.z) },
+      fail: (err) => console.error('加速度监听失败', err)
+    })
+    this.isSubscribed = true
+  },
+
+  stopAccelerometerListener() {
+    if (this.isSubscribed) {
+      sensor.unsubscribeAccelerometer()
+      this.isSubscribed = false
+    }
+  },
+
+  // 触发冷却判定：
+  //  - single：按 cfg.cooldown（单音频冷却 = 时长 + 600ms）
+  //  - 自定义多段（含 cfg.cooldowns）：按“即将播放那一步音频”的独立冷却
+  //  - 内置多段（无 cooldowns）：按 isPlaying（播放中禁触发）
+  cooldownBlocked() {
+    if (this.noCooldownEnabled) return false
+    const now = Date.now()
+    if (this.cfg.type === 'single') {
+      return (now - this.lastPlayTime < (this.cfg.cooldown || 1000))
+    }
+    if (this.cfg.type === 'sequence' && Array.isArray(this.cfg.cooldowns) && this.cfg.cooldowns.length > 0) {
+      // 冷却绑定“上次实际播放的音频”，避免非锁定轮转时对应错音频
+      const idx = Math.min(Math.max(0, this.lastPlayedIdx || 0), this.cfg.cooldowns.length - 1)
+      const cd = this.cfg.cooldowns[idx] || 1000
+      return (now - this.lastPlayTime < cd)
+    }
+    return this.isPlaying
+  },
+
+  checkAccelerationTrigger(x, y, z) {
+    const now = Date.now()
+    // 冷却判定：single/自定义多段按各自音频冷却，内置多段按播放中
+    if (this.cooldownBlocked()) return
+    const { axis, direction } = this.getAxisAndDirection(this.mode)
+    const threshold = this.threshold
+    let value
+    switch (axis) {
+      case 'x': value = x; break
+      case 'y': value = y; break
+      case 'z': value = z; break
+      default: return
+    }
+    let currentAbove = false
+    if (direction === 'positive') { currentAbove = value > threshold }
+    else if (direction === 'negative') { currentAbove = value < -threshold }
+    else { currentAbove = Math.abs(value) > threshold }
+    if (currentAbove && !this.lastAbove) {
+      this.lastAbove = true
+      this.lastPlayTime = now
+      this.dispatchPlay()
+    } else if (!currentAbove) {
+      this.lastAbove = false
+    }
+  },
+
+  // 封面图片加载失败（如封面文件缺失/损坏）→ 回退文字展示
+  onImgError() {
+    this.imgError = true
+  },
+
+  // ================= 播放分发 =================
+  onImageClick() {
+    // 长按进入挂机后会补发 click：命中守卫则吞掉，避免额外手动播放
+    if (this.isLongPressGuard()) return
+    const now = Date.now()
+    if (this.cooldownBlocked()) return
+    this.lastPlayTime = now
+    if (this.cfg.type === 'single') {
+      this.playSingle()
+    } else {
+      this.dispatchPlay()
+    }
+  },
+
+  dispatchPlay() {
+    if (this.cfg.type === 'single') {
+      this.playSingle()
+    } else {
+      this.playSequence()
+    }
+  },
+
+  // 通用：背景淡入淡出动画（每次播放触发一次：透明 → 完全可见 → 透明）
+  flashBackground() {
+    this.clearColorTimer()
+    // 先归零，确保从透明开始（兼容上一轮动画未完全结束的情况）
+    this.bgImageOpacity = 0
+    this.bgTextOpacity = 0
+    // 淡入（30ms 后开始，让归零生效）
+    this.colorTimer = setTimeout(() => {
+      this.bgImageOpacity = 1
+      this.bgTextOpacity = 1
+      // 淡出
+      this.colorTimer = setTimeout(() => {
+        this.bgImageOpacity = 0
+        this.bgTextOpacity = 0
+        this.colorTimer = null
+      }, 300)
+    }, 30)
+  },
+
+  // 预加载首段音频：进入页面即设置 src（不播放），让播放器提前加载/解码，
+  // 首次触发播放时无需等待文件加载，减少出声延迟
+  preloadAudio() {
+    try {
+      const firstSrc = this.getFirstAudioSrc()
+      if (firstSrc) {
+        audio.stop()
+        audio.src = firstSrc
+        audio.loop = false
+      }
+    } catch (e) {
+      console.error('预加载音频失败', e)
+    }
+  },
+
+  // 计算首段音频路径（单段取 sound；多段取第 1 段）
+  getFirstAudioSrc() {
+    if (!this.cfg) return ''
+    if (this.cfg.type === 'single') return this.cfg.sound || ''
+    if (this.cfg.type === 'sequence' && Array.isArray(this.cfg.sounds) && this.cfg.sounds.length > 0) {
+      return this.cfg.soundPath + this.cfg.sounds[0]
+    }
+    return ''
+  },
+
+  // 当前段播放结束后预加载下一段：按播放序列规则推算下一个 count 对应的音频，
+  // 提前让播放器加载，轮播切换时无需再等待文件加载
+  preloadNextAudio() {
+    try {
+      const nextSrc = this.getNextAudioSrc()
+      if (nextSrc) {
+        audio.src = nextSrc
+        audio.loop = false
+      }
+    } catch (e) {
+      console.error('预加载下一段音频失败', e)
+    }
+  },
+
+  // 推算下一次要播放的音频路径（与 playSequence 的序列公式保持一致）
+  getNextAudioSrc() {
+    if (this.cfg.type !== 'sequence' || !Array.isArray(this.cfg.sounds) || this.cfg.sounds.length === 0) return ''
+    // 未锁定：playCount 在播放时已递增为下一次的计数；锁定：始终播固定段
+    const nextCount = this.isLocked ? this.fixedPlayCount : this.playCount
+    const total = this.cfg.totalSteps || this.cfg.sounds.length
+    const idx = Math.min(Math.max(0, nextCount - (total - this.cfg.sounds.length)), this.cfg.sounds.length - 1)
+    return this.cfg.soundPath + this.cfg.sounds[idx]
+  },
+
+  playAudio(src, duration) {
+    // 每次播放前 stop；src 未变化（已预加载）时不重新赋值，复用已加载缓冲减少延迟
+    audio.stop()
+    // 新一段开始：复位「已播完」标记与结束时刻
+    this._audioEnded = false
+    this._audioEndedAt = 0
+    if (audio.src !== src) {
+      audio.src = src
+    }
+    audio.loop = false
+    audio.play()
+    // 兜底定时器：正常由 audio.onended 精确复位 isPlaying；
+    // 仅在 onended 未触发时用解析时长兜底（不加随意余量，避免拖慢复位），并补一次下一段预加载
+    this.clearPlayTimer()
+    this.playTimer = setTimeout(() => {
+      this.isPlaying = false
+      this.markAudioEnded()
+      this.playTimer = null
+      this.preloadNextAudio()
+    }, duration)
+  },
+
+  playSequence() {
+    // === 播放核心：同步执行，保证立即出声 ===
+    this.clearPlayTimer()
+    audio.stop()
+
+    let count
+    if (this.isLocked) {
+      count = this.fixedPlayCount
+    } else {
+      count = this.playCount
+      this.playCount = (this.playCount + 1) % this.cfg.totalSteps
+    }
+
+    // 播放顺序：优先重复靠前的音频，仅在末尾过渡到后续音频（如 2 音频 4 步：1,1,1,2）
+    const idx = Math.min(Math.max(0, count - (this.cfg.totalSteps - this.cfg.sounds.length)), this.cfg.sounds.length - 1)
+    // 记录本次实际播放的音频索引，供触发冷却判定使用
+    this.lastPlayedIdx = idx
+    const src = this.cfg.soundPath + this.cfg.sounds[idx]
+    const dur = this.cfg.durations
+    const duration = Array.isArray(dur) ? dur[Math.min(idx, dur.length - 1)] : dur
+
+    this.isPlaying = true
+    this.playAudio(src, duration)
+
+    // === 播放启动后的操作（不阻塞出声）：震动/进度/持久化/动画 ===
+    // 挂机自动播放不震动（避免长时间连续震动疲劳 + 省电）
+    if (this.vibrationEnabled && !this._autoPlaying) { vibrator.vibrate({ mode: this.vibrationMode }) }
+    this.currentPlayingIndex = count + 1
+    this.progressPercent = Math.round(((count + 1) / this.cfg.totalSteps) * 100)
+    this.progressText = (count + 1) + '/' + this.cfg.totalSteps
+    if (!this.isLocked) this.setStorage('play_count', this.playCount)
+    this.flashBackground()
+  },
+
+  playSingle() {
+    // === 播放核心：同步执行，保证立即出声 ===
+    this.clearPlayTimer()
+    audio.stop()
+    this.isPlaying = true
+    const duration = this.cfg.duration || 500
+    this.playAudio(this.cfg.sound, duration)
+
+    // === 播放启动后的操作（不阻塞出声）：震动/动画 ===
+    // 挂机自动播放不震动
+    if (this.vibrationEnabled && !this._autoPlaying) { vibrator.vibrate({ mode: this.vibrationMode }) }
+    this.flashBackground()
+  },
+
+  // ================= 锁定 =================
+  toggleLock() {
+    if (!this.showProgress) return
+    this.lastLockTime = Date.now()
+    this.isLocked = !this.isLocked
+    this.lockStatus = this.isLocked ? '锁定' : '解锁'
+    if (this.isLocked) {
+      this.fixedPlayCount = this.currentPlayingIndex - 1
+      if (this.fixedPlayCount < 0) this.fixedPlayCount = 0
+      if (this.fixedPlayCount >= this.cfg.totalSteps) this.fixedPlayCount = this.cfg.totalSteps - 1
+    }
+    this.setStorage('is_locked', this.isLocked)
+    this.setStorage('fixed_play_count', this.fixedPlayCount)
+    this.updateProgressDisplay()
+  },
+
+  // ================= 挂机（自动播放） =================
+  // 长按中心图片/文字：进入挂机
+  // 已挂机时遮罩在最上层，长按到不了中心元素；此处仍做幂等保护
+  onCenterLongPress() {
+    this.lastLongPressTime = Date.now()
+    if (this.isHangup) return
+    this.isHangup = true
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.startHangupLoop()
+  },
+
+  // 短按屏幕任意位置（遮罩）：退出挂机
+  // 长按进入后平台可能补发一次 click 落在遮罩上，由守卫吞掉，避免刚进入就退出
+  onMaskClick() {
+    if (this.isLongPressGuard()) return
+    this.stopHangup()
+  },
+
+  // 长按补发 click 守卫：时间戳自过期，无需手动复位
+  isLongPressGuard() {
+    return (Date.now() - this.lastLongPressTime) < LONG_PRESS_GUARD_MS
+  },
+
+  // 退出挂机（带一次性震动反馈）
+  stopHangup() {
+    if (!this.isHangup) return
+    this.isHangup = false
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.stopHangupLoop()
+  },
+
+  // 进入挂机：立即播放一次，并启动递归排期
+  startHangupLoop() {
+    this.stopHangupLoop()
+    // 复位等待累计：否则首轮 undefined + n = NaN，超时兜底（>=8s 强制续播）永远不触发
+    this._stateWaitedMs = 0
+    this.runHangupTick()
+  },
+
+  // 单次挂机 tick（两阶段门控）
+  //   阶段1：等冷却 —— 冷却时长已知，精确 setTimeout，零 API 调用
+  //   阶段2：确认「真的播完」—— 事件标记优先（零开销），未置位时用 getPlayState 求证
+  runHangupTick() {
+    this.hangupTimer = null
+    if (!this.isHangup) return
+
+    // === 阶段1：冷却 ===
+    const remainMs = this.getCooldownRemainMs()
+    if (remainMs > 0) {
+      this._stateWaitedMs = 0
+      this.hangupTimer = setTimeout(() => { this.runHangupTick() }, remainMs)
+      return
+    }
+
+    // === 阶段2：播放结束确认 ===
+    if (this._audioEnded) {
+      // 已播完 → 再等「结束后固定延迟」，避免连播过密
+      const afterMs = this.getAfterEndRemainMs()
+      if (afterMs > 0) {
+        this.hangupTimer = setTimeout(() => { this.runHangupTick() }, afterMs)
+        return
+      }
+      this._stateWaitedMs = 0
+      this.playHangupOnce()
+      this.hangupTimer = setTimeout(() => { this.runHangupTick() }, HANGUP_STATE_POLL_MS)
+      return
+    }
+
+    // 无在播音频（进入挂机首轮，或上一段已被停止）→ 直接播一段，无需「已播完」确认
+    // 否则冷启动时事件标记未置位、接口又误报 state='play'，会陷入只轮询不播放
+    if (!this.isPlaying) {
+      this._stateWaitedMs = 0
+      this.playHangupOnce()
+      this.hangupTimer = setTimeout(() => { this.runHangupTick() }, HANGUP_STATE_POLL_MS)
+      return
+    }
+
+    this.queryAudioStopped((stopped) => {
+      if (!this.isHangup) return
+      if (stopped === false) {
+        // 平台确认仍在播放 → 稍后再确认
+        this._stateWaitedMs = (this._stateWaitedMs || 0) + HANGUP_STATE_POLL_MS
+        if (this._stateWaitedMs >= HANGUP_MAX_STATE_WAIT_MS) {
+          console.error('挂机等待播放结束超时，强制续播')
+          this._stateWaitedMs = 0
+          this.playHangupOnce()
+        }
+        this.hangupTimer = setTimeout(() => { this.runHangupTick() }, HANGUP_STATE_POLL_MS)
+        return
+      }
+      // stopped === true（已停止）→ 记录结束时刻，进入「结束后固定延迟」
+      if (stopped === true) {
+        this.markAudioEnded()
+        this._stateWaitedMs = 0
+        const afterMs = this.getAfterEndRemainMs()
+        if (afterMs > 0) {
+          this.hangupTimer = setTimeout(() => { this.runHangupTick() }, afterMs)
+          return
+        }
+      } else {
+        // null（查询失败/不可用）→ 保守续播
+        this._stateWaitedMs = 0
+      }
+      this.playHangupOnce()
+      this.hangupTimer = setTimeout(() => { this.runHangupTick() }, HANGUP_STATE_POLL_MS)
+    })
+  },
+
+  // 播放一段（挂机自动播放不震动）
+  playHangupOnce() {
+    this._audioEnded = false
+    this._audioEndedAt = 0
+    this._autoPlaying = true
+    try {
+      this.dispatchPlay()
+    } catch (e) {
+      console.error('挂机自动播放失败', e)
+    } finally {
+      this._autoPlaying = false
+    }
+  },
+
+  // 标记「播放已结束」：记录首次结束时刻（供结束后固定延迟使用）
+  markAudioEnded() {
+    this._audioEnded = true
+    if (!this._audioEndedAt) this._audioEndedAt = Date.now()
+  },
+
+  // 播放结束后固定延迟的剩余毫秒（结束后统一等 HANGUP_AFTER_END_DELAY_MS 再续播）
+  getAfterEndRemainMs() {
+    if (!this._audioEndedAt) return 0
+    return Math.max(0, HANGUP_AFTER_END_DELAY_MS - (Date.now() - this._audioEndedAt))
+  },
+
+  // 查询「音频是否已停止」：true=已停止 / false=仍在播 / null=未知
+  queryAudioStopped(cb) {
+    try {
+      if (!audio || typeof audio.getPlayState !== 'function') {
+        cb(null)
+        return
+      }
+      audio.getPlayState({
+        success: (data) => cb(this.isAudioStopped(data)),
+        fail: (e, code) => {
+          console.error('查询播放状态失败 code=' + code, e)
+          cb(null)
+        }
+      })
+    } catch (e) {
+      console.error('查询播放状态异常', e)
+      cb(null)
+    }
+  },
+
+  // 按官方文档的三重停止信号判定（state 仅 'play'/'pause'/'stop'）
+  isAudioStopped(data) {
+    if (!data) return null
+    if (data.state === 'play') return false
+    if (data.state === 'stop' || data.state === 'pause') return true
+    // state 缺失/异常 → 用文档明确的停止特征兜底：src 为空串、currentTime 为 -1
+    const cur = Number(data.currentTime)
+    if (data.src === '' || (!isNaN(cur) && cur < 0)) return true
+    if (!isNaN(cur)) return false
+    return null
+  },
+
+  // 停止挂机调度（先清后建，避免定时器叠加）
+  stopHangupLoop() {
+    if (this.hangupTimer) {
+      clearTimeout(this.hangupTimer)
+      this.hangupTimer = null
+    }
+  },
+
+  // 冷却剩余毫秒（冷却时长已知，可直接精确等待，无需轮询）
+  getCooldownRemainMs() {
+    if (this.noCooldownEnabled) return 0
+    const cd = this.getCooldownMs()
+    if (!cd) return 0
+    return Math.max(0, cd - (Date.now() - this.lastPlayTime))
+  },
+
+  // 当前冷却值（取法与 cooldownBlocked 保持一致）
+  getCooldownMs() {
+    if (this.cfg.type === 'single') return this.cfg.cooldown || 1000
+    if (this.cfg.type === 'sequence' && Array.isArray(this.cfg.cooldowns) && this.cfg.cooldowns.length > 0) {
+      const idx = Math.min(Math.max(0, this.lastPlayedIdx || 0), this.cfg.cooldowns.length - 1)
+      return this.cfg.cooldowns[idx] || 1000
+    }
+    return 0
+  },
+
+  // ================= 工具 =================
+  clearPlayTimer() {
+    if (this.playTimer) { clearTimeout(this.playTimer); this.playTimer = null }
+  },
+
+  clearColorTimer() {
+    if (this.colorTimer) { clearTimeout(this.colorTimer); this.colorTimer = null }
+  },
+
+  setKeepScreenOn(keep) {
+    brightness.setKeepScreenOn({ keepScreenOn: keep })
+  },
+
+  // ================= 页面跳转 =================
+  goToModeSelect() { router.replace({ uri: '/pages/mode-select' }) },
+  goToMenu() { router.replace({ uri: '/pages/start/loading', params: { target: 'menu' } }) },
+  goToSetting() { router.replace({ uri: '/pages/setting' }) }
+}
+</script>

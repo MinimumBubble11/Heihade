@@ -14,33 +14,57 @@
     background-color: #000000;
   }
   .loading-text {
-    font-size: 15px;
-    color: #ffffff;
+    font-size: 14dp;
+    color: #888888;
   }
   </style>
   
   <script>
   import router from '@system.router'
-  import storage from '@system.storage'
-  
+  import prompt from '@system.prompt'
+  import settings from '../../../common/settings'
+
   export default {
+    protected: {
+      target: ''   // 'menu' | 'download' | 空（原有逻辑）
+    },
+
     onInit() {
-      // 读取上次点击的目标页面路径
-      storage.get({
-        key: 'lastTargetPage',
-        success: (value) => {
-          if (value) {
-            // 跳转到目标页面，使用 replace 避免回到加载页
-            router.replace({ uri: value })
-          } else {
-            // 没有记录
-            router.replace({ uri: '/pages/Leijun' })
-          }
-        },
-        fail: () => {
-            router.replace({ uri: '/pages/Leijun' })
+      const that = this
+      const target = this.target || ''
+
+      if (target === 'menu') {
+        // 去菜单：检查 use_menu_neo 开关（未设置过默认启用新版菜单）
+        settings.get('use_menu_neo', 'true').then((data) => {
+          const useNeo = (data === 'true' || data === true)
+          router.replace({ uri: useNeo ? '/pages/menu/menuNeo' : '/pages/menu' })
+        })
+      } else if (target === 'download') {
+        // 去下载：检查 use_github_neo 开关（未设置过默认启用新版商店）
+        settings.get('use_github_neo', 'true').then((data) => {
+          const useNeo = (data === 'true' || data === true)
+          router.replace({ uri: useNeo ? '/pages/menu/github/githubNeo' : '/pages/menu/github' })
+        })
+      } else {
+        // 无传参：原有 lastTargetPage 逻辑
+        that.redirectByLastTarget()
+      }
+    },
+
+    redirectByLastTarget() {
+      settings.get('lastTargetPage').then((value) => {
+        if (value && value.indexOf('/pages/play') === 0) {
+          router.replace({ uri: value, params: { ___PARAM_LAUNCH_FLAG___: 'clearTask' } })
+        } else {
+          router.replace({ uri: '/pages/play?name=Leijun', params: { ___PARAM_LAUNCH_FLAG___: 'clearTask' } })
         }
       })
+    },
+
+    // 加载中转页：禁止返回（路由决策完成后会自动跳转）
+    onBackPress() {
+      prompt.showToast({ message: '正在加载，请稍候', duration: 1000 })
+      return true
     }
   }
   </script>

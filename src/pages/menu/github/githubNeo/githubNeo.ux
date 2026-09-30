@@ -1,0 +1,843 @@
+<!--
+  githubNeo —— 新版音效商店（GitHub 下载）
+  数据源：GitHub 三仓库 catalog.json（三级回退）
+  特性：分页 + 分类筛选 + 搜索（名称/描述/作者）+ 自研拼音输入法 + 下载队列
+-->
+<import name="input-method" src="../../../../components/InputMethod/InputMethod.ux"></import>
+<import name="transferoverlay" src="../../../../components/TransferOverlay"></import>
+
+<template>
+  <stack class="root-stack">
+    <!-- 滚动内容 -->
+    <scroll id="mainScroll" class="page" scroll-y="true" bounces="true" onscroll="onScrollHandler">
+      <!-- 标题行：标题 + 刷新 + 设置 -->
+      <div class="title-row">
+        <text class="title">音效下载</text>
+        <div class="title-refresh" onclick="refreshCatalog">
+          <image class="refresh-icon" src="/common/images/restart.png"></image>
+        </div>
+        <div class="title-refresh" onclick="openSettings">
+          <image class="refresh-icon" src="/common/images/setting.png"></image>
+        </div>
+      </div>
+
+      <!-- 搜索框（点击唤起自研输入法） -->
+      <div class="search-row" id="searchRow">
+        <div class="search-box" onclick="openKeyboard">
+          <text class="search-text" if="{{ searchText }}">{{ searchText }}</text>
+          <text class="search-placeholder" if="{{ !searchText }}">搜索音效（拼音/英文）</text>
+        </div>
+        <div class="search-clear" if="{{ !keyboardHide }}" onclick="closeKeyboard">
+          <text class="search-clear-text">↓</text>
+        </div>
+        <div class="search-clear" elif="{{ searchText }}" onclick="clearSearch">
+          <text class="search-clear-text">✕</text>
+        </div>
+      </div>
+
+      <!-- 分类筛选：横向滚动（全部 + 各分类） -->
+      <scroll class="cat-scroll" scroll-x="true" bounces="true">
+        <div class="cat-row">
+          <div class="cat-item {{ currentCat === '' ? 'active' : '' }}" onclick="selectCategory('')">
+            <text class="cat-text">全部</text>
+          </div>
+          <div class="cat-item {{ currentCat === $item ? 'active' : '' }}" for="{{ categories }}" tid="cat" onclick="selectCategory($item)">
+            <text class="cat-text">{{ $item }}</text>
+          </div>
+        </div>
+      </scroll>
+
+      <!-- 加载状态 -->
+      <text if="{{ loading }}" class="loading-text">加载武器目录...</text>
+
+      <!-- 加载失败 -->
+      <div if="{{ loadError }}" class="error-box">
+        <text class="error-title">加载失败</text>
+        <text class="error-hint">{{ loadErrorText }}</text>
+        <input class="retry-btn" type="button" value="重试" onclick="retryLoad" />
+      </div>
+
+      <!-- 音效列表：分页渲染（每页 20 个） -->
+      <div class="weapon-list">
+        <div class="weapon-item" for="{{ pageWeapons }}" tid="id" onclick="onWeaponTap($item)">
+          <div class="weapon-info">
+            <text class="weapon-name">{{ $item.name }}</text>
+            <text class="weapon-meta">{{ $item.audioCount }} 个音频{{ $item.downloaded ? ' · 已下载' : '' }}{{ $item.playMode === 2 ? ' · Combo' : '' }}</text>
+            <text class="weapon-desc" if="{{ $item.description }}">{{ $item.description }}</text>
+            <text class="weapon-author" if="{{ $item.author }}">来源：{{ $item.author }}</text>
+          </div>
+          <text class="weapon-status">{{ $item.downloaded ? '√' : '↓' }}</text>
+        </div>
+      </div>
+
+      <!-- 翻页栏 -->
+      <div class="pager" if="{{ pageWeapons.length > 0 }}">
+        <input class="page-btn" type="button" value="&lt;" onclick="prevPage" />
+        <text class="page-num">{{ pageIndex + 1 }}/{{ totalPages }}</text>
+        <input class="page-btn" type="button" value="&gt;" onclick="nextPage" />
+      </div>
+
+      <!-- 空状态：无武器 / 筛选无结果 -->
+      <div if="{{ weapons.length === 0 && !loading && !loadError }}" class="empty-state">
+        <text class="empty-title">暂无可用武器</text>
+      </div>
+      <div if="{{ weapons.length > 0 && filteredWeapons.length === 0 && !loading && !loadError }}" class="empty-state">
+        <text class="empty-title">没有匹配的音效</text>
+      </div>
+
+      <div class="bottom-space"></div>
+      <div class="kb-space" if="{{ !keyboardHide }}"></div>
+    </scroll>
+
+    <!-- 下载进度 + 待下载队列：浮层由 transferoverlay 组件承载，定位由本层负责 -->
+    <div class="download-overlay">
+      <transferoverlay source="download" @download-end="refreshDownloadState"></transferoverlay>
+    </div>
+
+    <!-- 固定返回按钮 -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+    </div>
+
+    <!-- 自研输入法（底部悬浮，hide 控制显隐） -->
+    <input-method
+      hide="{{ keyboardHide }}"
+      keyboardtype="QWERTY"
+      maxlength="5"
+      vibratemode="{{ vibrationMode }}"
+      screentype="circle"
+      @complete="onInputComplete"
+      @delete="onInputDelete"
+      @key-down="onInputKeyDown"
+      @visibility-change="onInputVisibilityChange">
+    </input-method>
+
+    <!-- 设置面板（自绘，Vela 无原生对话框） -->
+    <div if="{{ settingsVisible }}" class="settings-overlay">
+      <div class="settings-dialog">
+        <text class="settings-title">下载设置</text>
+        <div class="settings-item" onclick="toggleShowDownloaded">
+          <text class="settings-label">显示已下载音效</text>
+          <image class="settings-switch" src="{{ showDownloaded ? '/common/images/true.png' : '/common/images/false.png' }}" />
+        </div>
+        <text class="settings-hint">关闭后列表不再显示已下载的音效</text>
+        <input class="settings-btn" type="button" value="完成" onclick="closeSettings" />
+      </div>
+    </div>
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: #000000;
+}
+
+.page {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+}
+
+/* 圆屏：上下 10% + 左右 7-8% 安全区 */
+@media (shape: circle) {
+  .page { padding: 35px 10px; }
+}
+
+/* 方屏：小边距 */
+@media (shape: rect) {
+  .page { padding: 30px 0; }
+}
+
+.title-row {
+  width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 6dp;
+}
+
+.title {
+  font-size: 17dp;
+  color: #4ccfff;
+  font-weight: bold;
+}
+
+.title-refresh {
+  width: 24px;
+  height: 24px;
+  border-radius: 13px;
+  background-color: #333;
+  justify-content: center;
+  align-items: center;
+  border: 2px solid #555;
+  margin-left: 10px;
+}
+
+.refresh-icon {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+}
+
+/* 设置面板（自绘弹层） */
+.settings-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+.settings-dialog {
+  width: 82%;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 12px;
+  background-color: #1a1a1a;
+  border-radius: 14px;
+  border: 2px solid #333333;
+}
+
+.settings-title {
+  font-size: 15dp;
+  color: #4ccfff;
+  font-weight: bold;
+  margin-bottom: 8dp;
+}
+
+.settings-item {
+  width: 100%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px;
+}
+
+.settings-label {
+  font-size: 14dp;
+  color: #ffffff;
+}
+
+.settings-switch {
+  width: 24dp;
+  height: 24dp;
+  object-fit: contain;
+}
+
+.settings-hint {
+  width: 100%;
+  font-size: 11dp;
+  color: #888888;
+  margin-top: 2dp;
+  margin-bottom: 12dp;
+}
+
+.settings-btn {
+  width: 70%;
+  height: 32dp;
+  border-radius: 16dp;
+  background-color: #1d5c73;
+  font-size: 14dp;
+  color: #4ccfff;
+}
+
+@media (shape: circle) {
+  .settings-dialog {
+    width: 62%;
+  }
+}
+
+/* 搜索框 */
+.search-row {
+  width: 92%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 4dp;
+}
+
+.search-box {
+  flex: 1;
+  height: 28dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  justify-content: center;
+  align-items: center;
+  border: 2px solid #555555;
+}
+
+.search-text {
+  font-size: 14dp;
+  color: #ffffff;
+}
+
+.search-placeholder {
+  font-size: 12dp;
+  color: #777777;
+}
+
+.search-clear {
+  width: 28dp;
+  height: 28dp;
+  margin-left: 6dp;
+  border-radius: 14dp;
+  background-color: #333333;
+  justify-content: center;
+  align-items: center;
+}
+
+.search-clear-text {
+  font-size: 14dp;
+  color: #ff6b6b;
+}
+
+/* 分类筛选条 */
+.cat-scroll {
+  width: 92%;
+  margin-top: 2dp;
+  margin-bottom: 2dp;
+}
+
+.cat-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.cat-item {
+  height: 26dp;
+  padding-left: 12px;
+  padding-right: 12px;
+  border-radius: 13dp;
+  background-color: #222222;
+  justify-content: center;
+  align-items: center;
+  margin-right: 6dp;
+  border: 2px solid transparent;
+}
+
+.cat-item.active {
+  border-color: #4ccfff;
+  background-color: #2a2a2a;
+}
+
+.cat-text {
+  font-size: 12dp;
+  color: #cccccc;
+}
+
+.loading-text {
+  font-size: 13dp;
+  color: #888888;
+  margin-top: 40dp;
+}
+
+.error-box {
+  width: 90%;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 40dp;
+}
+
+.error-title {
+  font-size: 16dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.error-hint {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 6dp;
+}
+
+.retry-btn {
+  width: 100dp;
+  height: 30dp;
+  border-radius: 15dp;
+  background-color: #222222;
+  font-size: 13dp;
+  color: #4ccfff;
+  margin-top: 12dp;
+}
+
+/* 音效列表 */
+.weapon-list {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.weapon-item {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  margin-top: 5px;
+  margin-bottom: 5px;
+  background-color: #222222;
+  border-radius: 12px;
+}
+
+.weapon-info {
+  flex-direction: column;
+  flex: 1;
+}
+
+.weapon-name {
+  font-size: 16dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.weapon-meta {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 3dp;
+}
+
+.weapon-desc {
+  font-size: 11dp;
+  color: #777777;
+  margin-top: 2dp;
+}
+
+.weapon-author {
+  font-size: 11dp;
+  color: #555555;
+  margin-top: 1dp;
+}
+
+.weapon-status {
+  font-size: 18dp;
+  color: #4ccfff;
+  margin-left: 8dp;
+}
+
+/* 翻页栏 */
+.pager {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+@media (shape:circle){
+  .pager{
+    width: 60%;
+  }
+}
+
+.page-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 100%;
+  border: 2px solid #333333;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #4ccfff;
+}
+
+.page-num {
+  font-size: 15px;
+  color: #ffffff;
+}
+
+.empty-state {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 60dp;
+}
+
+.empty-title {
+  font-size: 14dp;
+  color: #888888;
+  text-align: center;
+}
+
+.bottom-space {
+  width: 100%;
+  height: 30px;
+}
+
+/* 键盘打开时额外留白，避免最后一项被键盘遮挡 */
+.kb-space {
+  width: 100%;
+  height: 150dp;
+}
+
+/* 下载进度 */
+.download-overlay {
+  position: absolute;
+  top: 38%;
+  left: 0;
+  width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 返回按钮 */
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  height: 35dp;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-button-fixed {
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #cccccc;
+}
+</style>
+
+<script>
+import router from '@system.router'
+import vibrator from '@system.vibrator'
+import prompt from '@system.prompt'
+import downloadModule from '../../../../common/download'
+import audioSync from '../../../../common/audiosync'
+import dlManager from '../../../../common/downloadmanager'
+import vibration from '../../../../common/vibrate'
+import settings from '../../../../common/settings'
+
+// 数据源：GitHub 三仓库分发 catalog.json（三级回退：域名 → jsdelivr CDN → IP 直连）
+const GITHUB_CATALOG_URL = 'https://MinimumBubble11.github.io/Heihade_index/catalog.json'
+
+// 每页显示武器数量（平铺过多易崩溃，故分页渲染）
+const PAGE_SIZE = 20
+
+export default {
+  private: {
+    vibrationEnabled: true,
+    vibrationMode: 'short',
+    loading: true,
+    loadError: false,
+    loadErrorText: '',
+    weapons: [],
+    filteredWeapons: [],
+    pageWeapons: [],
+    pageIndex: 0,
+    totalPages: 1,
+    categories: [],
+    currentCat: '',
+    searchText: '',
+    keyboardHide: true,
+    scrollY: 0,
+    // 设置面板：是否显示已下载音效（关闭后列表仅显示未下载）
+    settingsVisible: false,
+    showDownloaded: true
+  },
+
+  onInit() {
+    this.loadSettings()
+    this.loadShowDownloaded()
+    audioSync.init()
+    this.loadCatalog()
+  },
+
+  onShow() {
+    if (!dlManager.isDownloading()) {
+      this.refreshDownloadState()
+    }
+  },
+
+  loadSettings() {
+    vibration.loadSetting().then((vib) => {
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
+    })
+  },
+
+  // 读取「显示已下载音效」设置（默认显示）
+  loadShowDownloaded() {
+    const that = this
+    settings.get('show_downloaded_weapons', 'true').then((data) => {
+      that.showDownloaded = (data !== 'false')
+    })
+  },
+
+  // 打开设置面板
+  openSettings() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.settingsVisible = true
+  },
+
+  // 关闭设置面板
+  closeSettings() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.settingsVisible = false
+  },
+
+  // 切换「显示已下载音效」并持久化（保持当前页码立即生效）
+  toggleShowDownloaded() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.showDownloaded = !this.showDownloaded
+    settings.set('show_downloaded_weapons', String(this.showDownloaded))
+    prompt.showToast({
+      message: this.showDownloaded ? '已显示已下载音效' : '已隐藏已下载音效',
+      duration: 1200
+    })
+    this.applyFilter(true)
+  },
+
+  refreshCatalog() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (dlManager.isDownloading()) {
+      prompt.showToast({ message: '请等待当前下载完成', duration: 1500 })
+      return
+    }
+    if (this.loading) {
+      prompt.showToast({ message: '正在加载中...', duration: 1000 })
+      return
+    }
+    prompt.showToast({ message: '正在刷新...', duration: 1000 })
+    this.loadCatalog()
+  },
+
+  retryLoad() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.loading) return
+    this.loadCatalog()
+  },
+
+  loadCatalog() {
+    const that = this
+    this.loading = true
+    this.loadError = false
+    this.loadErrorText = ''
+
+    downloadModule.fetchCatalogWithFallback((list, finalLayer, lastErrorCode) => {
+      that.loading = false
+      if (!list) {
+        that.loadError = true
+        that.loadErrorText = lastErrorCode === 204
+          ? '网络未连接，请检查网络设置'
+          : '所有访问方式均失败，请检查网络'
+        console.error('[githubNeo] 所有访问方式均失败, lastErrorCode=' + lastErrorCode)
+        return
+      }
+
+      console.log(`[githubNeo] catalog 加载成功，使用层级: ${finalLayer}`)
+      downloadModule.setIpFallback(finalLayer === 3)
+
+      that.weapons = (list || []).map((w) => {
+        w.downloaded = false
+        return w
+      })
+
+      const cats = []
+      ;(that.weapons || []).forEach((w) => {
+        const c = w.category || 'other'
+        if (cats.indexOf(c) === -1) cats.push(c)
+      })
+      that.categories = cats
+      // 立即渲染列表（下载标记稍后由 refreshDownloadState 补齐）
+      that.applyFilter()
+      that.refreshDownloadState()
+    }, GITHUB_CATALOG_URL)
+  },
+
+  refreshDownloadState() {
+    const that = this
+    audioSync.load((list) => {
+      const ids = {}
+      ;(list || []).forEach((x) => { ids[x.id] = true })
+      that.weapons = (that.weapons || []).map((w) => {
+        w.downloaded = !!ids[w.id]
+        return w
+      })
+      // 保持当前页码，避免下载完成跳回第一页
+      that.applyFilter(true)
+    })
+  },
+
+  // keepPage=true 时保持当前页码（下载完成刷新等场景）；否则重置到第一页（分类/搜索切换）
+  applyFilter(keepPage) {
+    let list = this.weapons || []
+    if (this.currentCat) {
+      list = list.filter((w) => (w.category || 'other') === this.currentCat)
+    }
+    const kw = (this.searchText || '').trim().toLowerCase()
+    if (kw) {
+      list = list.filter((w) => {
+        const name = (w.name || '').toLowerCase()
+        const desc = (w.description || '').toLowerCase()
+        const author = (w.author || '').toLowerCase()
+        return name.indexOf(kw) >= 0 || desc.indexOf(kw) >= 0 || author.indexOf(kw) >= 0
+      })
+    }
+    // 按设置过滤：关闭「显示已下载音效」后仅保留未下载的
+    if (!this.showDownloaded) {
+      list = list.filter((w) => !w.downloaded)
+    }
+    this.filteredWeapons = list.slice()
+    if (!keepPage) this.pageIndex = 0
+    this.updatePages()
+  },
+
+  // ===== 分页 =====
+  updatePages() {
+    this.totalPages = Math.max(1, Math.ceil(this.filteredWeapons.length / PAGE_SIZE))
+    if (this.pageIndex > this.totalPages - 1) this.pageIndex = this.totalPages - 1
+    this.applyPage()
+  },
+
+  applyPage() {
+    const start = this.pageIndex * PAGE_SIZE
+    this.pageWeapons = this.filteredWeapons.slice(start, start + PAGE_SIZE)
+  },
+
+  prevPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.pageIndex <= 0) return
+    this.pageIndex--
+    this.applyPage()
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  nextPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.pageIndex >= this.totalPages - 1) return
+    this.pageIndex++
+    this.applyPage()
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  // 滚动到页面最底部（翻页渲染完成后执行；超大 top 值由框架钳制到最大滚动量）
+  scrollToBottom() {
+    const that = this
+    this.$nextTick(() => {
+      const scrollEl = that.$element('mainScroll')
+      if (scrollEl) {
+        scrollEl.scrollTo({ top: 999999, behavior: 'instant' })
+      }
+    })
+  },
+
+  selectCategory(cat) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.currentCat = cat || ''
+    this.applyFilter()
+  },
+
+  // ===== 搜索框 =====
+  openKeyboard() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.keyboardHide = false
+    // 动态计算搜索框位置，滚动到搜索框位于安全区域
+    const that = this
+    this.$nextTick(() => {
+      const scrollEl = that.$element('mainScroll')
+      const searchEl = that.$element('searchRow')
+      if (scrollEl && searchEl) {
+        searchEl.getBoundingClientRect({
+          success: function(data) {
+            const safeMargin = 32
+            const target = that.scrollY + data.top - safeMargin
+            scrollEl.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
+          },
+          fail: function() {
+            scrollEl.scrollTo({ top: 0, behavior: 'smooth' })
+          }
+        })
+      }
+    })
+  },
+
+  onScrollHandler(e) {
+    this.scrollY = e.scrollY || 0
+  },
+
+  closeKeyboard() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.keyboardHide = true
+  },
+
+  clearSearch() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.searchText = ''
+    this.applyFilter()
+  },
+
+  // ===== 输入法事件（接口与 NEORUAA 对齐） =====
+  onInputComplete(evt) {
+    const content = evt && evt.detail && evt.detail.content
+    if (!content) return
+    this.searchText += content
+    this.applyFilter()
+  },
+
+  onInputDelete() {
+    if (this.searchText.length > 0) {
+      this.searchText = this.searchText.slice(0, -1)
+      this.applyFilter()
+    }
+  },
+
+  onInputKeyDown() {
+    // 按键预览：当前无需处理，保留接口以便替换第三方输入法
+  },
+
+  onInputVisibilityChange(evt) {
+    // 键盘显隐通知：保留接口
+    if (evt && evt.detail) {
+      // 可在此同步键盘状态
+    }
+  },
+
+  // ===== 下载队列 =====
+  onWeaponTap(item) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (item.downloaded) {
+      prompt.showToast({ message: '该音效已下载', duration: 1500 })
+      return
+    }
+    const r = dlManager.enqueue(item)
+    if (r === 'downloading') {
+      prompt.showToast({ message: '该音效正在下载中', duration: 1500 })
+    } else if (r === 'duplicate') {
+      prompt.showToast({ message: '该音效已在队列中', duration: 1200 })
+    } else if (r === 'full') {
+      prompt.showToast({ message: '下载队列已满（最多3个）', duration: 1500 })
+    } else if (r === 'queued') {
+      prompt.showToast({ message: '已加入下载队列（' + dlManager.getState().queue.length + '/3）', duration: 1200 })
+    }
+  },
+
+  onBackPress() {
+    // 键盘展开时禁止系统返回，改为收起键盘
+    if (!this.keyboardHide) {
+      this.closeKeyboard()
+      return true
+    }
+    router.back()
+    return true
+  },
+
+  goBack() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.back()
+  }
+}
+</script>

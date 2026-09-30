@@ -1,0 +1,706 @@
+<import name="transferoverlay" src="../../../components/TransferOverlay"></import>
+
+<template>
+  <stack class="root-stack">
+    <!-- 滚动内容 -->
+    <scroll id="mainScroll" class="page" scroll-y="true" bounces="true">
+      <!-- 同步帮助入口：始终显示在页面顶部（正常文档流，非叠加层） -->
+      <div class="help-entry" onclick="goHelp">
+        <text class="help-entry-text">同步帮助</text>
+        <text class="help-entry-hint">AstroBox 插件使用说明</text>
+        <text class="help-entry-arrow">›</text>
+      </div>
+
+      <!-- 自定义音频列表（非批量模式：点击删除；批量模式：点击勾选） -->
+      <div class="sound-list">
+        <div
+          class="sound-item"
+          for="{{ pageSounds }}"
+          tid="id"
+          onclick="onItemTap($item)"
+        >
+          <div class="sound-info">
+            <text class="sound-name">{{ $item.name }}</text>
+            <text class="sound-meta">{{ $item.modeText }} · {{ $item.fileCount }} · {{ $item.sizeText }}{{ $item.hasImage ? ' · 封面' : '' }}{{ $item.sizeMismatch ? ' · 大小异常' : '' }}</text>
+          </div>
+          <text class="sound-action">{{ $item.action }}</text>
+        </div>
+      </div>
+
+      <!-- 空状态 -->
+      <div if="{{ sounds.length === 0 }}" class="empty-state">
+        <text class="empty-title">暂无音效</text>
+        <text class="empty-hint">点击下载或使用AxtroBox插件同步</text>
+        <text class="empty-hint">长按可删除单个音效</text>
+      </div>
+
+      <!-- 分页栏 -->
+      <div class="pager" if="{{ pageSounds.length > 0 }}">
+        <input class="page-btn" type="button" value="&lt;" onclick="prevPage" />
+        <text class="page-num">{{ pageIndex + 1 }}/{{ totalPages }}</text>
+        <input class="page-btn" type="button" value="&gt;" onclick="nextPage" />
+      </div>
+
+      <!-- 管理操作栏：批量删除 + 清空全部 / 取消 + 删除选中 -->
+      <div if="{{ sounds.length > 0 }}" class="manage-bar">
+        <block if="{{ !batchMode }}">
+          <input class="manage-btn" type="button" value="批量删除" onclick="enterBatchMode" />
+          <input class="manage-btn manage-danger" type="button" value="清空全部" onclick="clearAll" />
+        </block>
+        <block if="{{ batchMode }}">
+          <input class="manage-btn" type="button" value="取消" onclick="exitBatchMode" />
+          <input class="manage-btn manage-danger" type="button" value="删除选中({{ selectedCount }})" onclick="batchDelete" />
+        </block>
+      </div>
+      <div class="bottom-space"></div>
+    </scroll>
+
+    <!-- 同步进度：浮层由 transferoverlay 组件承载，定位由本层负责 -->
+    <div class="sync-overlay">
+      <transferoverlay source="sync"></transferoverlay>
+    </div>
+
+    <!-- 固定返回按钮 -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+      <!-- 连接状态 -->
+      <div class="status-bar">
+        <text class="status-text">连接状态：{{ connText }}</text>
+        <!-- 刷新按钮：图标 + 圆形灰色背景，点击刷新列表 -->
+        <div class="status-refresh" onclick="refreshList">
+          <image class="refresh-icon" src="/common/images/restart.png"></image>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除确认弹层（自绘，Vela 无原生对话框） -->
+    <div if="{{ confirmVisible }}" class="confirm-overlay">
+      <div class="confirm-dialog">
+        <text class="confirm-title">{{ confirmTitle }}</text>
+        <text class="confirm-message">{{ confirmMessage }}</text>
+        <div class="confirm-btns">
+          <input class="confirm-btn" type="button" value="取消" onclick="cancelConfirm" />
+          <input class="confirm-btn confirm-danger" type="button" value="删除" onclick="doConfirm" />
+        </div>
+      </div>
+    </div>
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.page {
+  margin-top: 40px;
+  width: 100%;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+  padding: 12px 10px 36px 10px;
+}
+
+.status-bar {
+  width: 75%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 5px;
+}
+
+.status-text {
+  font-size: 13dp;
+  color: #cccccc;
+}
+
+.status-refresh {
+  width: 24px;
+  height: 24px;
+  border-radius: 13px;
+  background-color: #333;
+  justify-content: center;
+  align-items: center;
+  border: 2px solid #555;
+}
+
+.refresh-icon {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+}
+
+/* 同步进度：置顶悬浮（不受滚动影响） */
+.sync-overlay {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+}
+
+/* 同步帮助入口（页面顶部，正常文档流） */
+.help-entry {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin-top: 4px;
+  margin-bottom: 6px;
+  background-color: #1d2f3a;
+  border-radius: 12px;
+  border: 2px solid #2c5c74;
+}
+
+.help-entry-text {
+  font-size: 15dp;
+  color: #4ccfff;
+  font-weight: bold;
+}
+
+.help-entry-hint {
+  flex: 1;
+  font-size: 11px;
+  color: #77aabb;
+  margin-left: 8px;
+  margin-right: 8px;
+}
+
+.help-entry-arrow {
+  font-size: 16dp;
+  color: #4ccfff;
+}
+
+.sound-list {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sound-item {
+  width: 94%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  margin: 4px 0;
+  background-color: #222222;
+  border-radius: 12px;
+  border: 2px solid transparent;
+}
+
+.sound-item.active {
+  border-color: #4ccfff;
+  background-color: #2a2a2a;
+}
+
+.sound-info {
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.sound-name {
+  font-size: 15dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.sound-meta {
+  font-size: 11dp;
+  color: #888888;
+  margin-top: 2px;
+}
+
+.sound-action {
+  font-size: 14dp;
+  color: #4ccfff;
+}
+
+.empty-state {
+  width: 90%;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.empty-title {
+  font-size: 16dp;
+  color: #ffffff;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.empty-hint {
+  font-size: 13dp;
+  color: #888888;
+  text-align: center;
+  line-height: 18px;
+  margin-top: 3px;
+  justify-content: center;
+}
+
+.manage-bar {
+  width: 100%;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.manage-btn {
+  width: 110dp;
+  height: 32dp;
+  border-radius: 16dp;
+  background-color: #222222;
+  font-size: 13dp;
+  color: #4ccfff;
+  text-align: center;
+  margin: 4px;
+}
+
+.manage-danger {
+  background-color: #3a1f1f;
+  color: #ff6b6b;
+}
+
+.pager {
+  width: 92%;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+@media (shape:circle){
+  .pager{
+    width: 60%;
+  }
+  .help-entry-hint {
+    font-size: 8px;
+  }
+}
+
+.page-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 100%;
+  border: 2px solid #333333;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #4ccfff;
+}
+
+.page-num {
+  font-size: 15px;
+  color: #ffffff;
+}
+
+.bottom-space {
+  height: 20px;
+  width: 100%;
+}
+
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-button-fixed {
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #cccccc;
+  margin: 2px;
+}
+
+@media (shape: rect) {
+  .sound-item {
+    padding: 12px 14px;
+  }
+  .empty-state {
+  margin-top: 30px;
+}
+  .status-bar {
+    width: 90%;
+}
+}
+
+/* 删除确认弹层 */
+.confirm-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.6);
+  z-index: 100;
+}
+
+.confirm-dialog {
+  width: 78%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #1a1a1a;
+  border-radius: 14px;
+  padding: 16px 14px;
+}
+
+.confirm-title {
+  font-size: 15dp;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.confirm-message {
+  font-size: 12dp;
+  color: #888888;
+  margin-top: 6px;
+  text-align: center;
+}
+
+.confirm-btns {
+  width: 100%;
+  flex-direction: row;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+
+.confirm-btn {
+  width: 45%;
+  height: 30dp;
+  border-radius: 15dp;
+  background-color: #222222;
+  font-size: 13dp;
+  color: #4ccfff;
+  text-align: center;
+}
+
+.confirm-danger {
+  background-color: #3a1f1f;
+  color: #ff6b6b;
+}
+</style>
+
+<script>
+import router from '@system.router'
+import vibrator from '@system.vibrator'
+import prompt from '@system.prompt'
+import audioSync from '../../../common/audiosync'
+import vibration from '../../../common/vibrate'
+
+// 每页显示的音效数量
+const PAGE_SIZE = 5
+
+export default {
+  private: {
+    connText: '检测中…',
+    sounds: [],
+    pageSounds: [],
+    pageIndex: 0,
+    totalPages: 1,
+    batchMode: false,
+    selectedCount: 0,
+    confirmVisible: false,
+    confirmTitle: '',
+    confirmMessage: '',
+    pendingAction: '',
+    confirmTarget: null,
+    confirmSelected: [],
+    vibrationEnabled: true,
+    vibrationMode: 'short'
+  },
+
+  onInit() {
+    const that = this
+    audioSync.init()
+    audioSync.load(function(list) {
+      that.applySounds(list)
+      that.refresh()
+    })
+    this.loadVibration()
+    this.checkConnection()
+  },
+
+  // 加载震动设置（复用设置页可配置的震动模式）
+  loadVibration() {
+    vibration.loadSetting().then((vib) => {
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
+    })
+  },
+
+  onShow() {
+    const that = this
+    audioSync.load(function(list) {
+      that.applySounds(list)
+      that.refresh()
+    })
+    this.checkConnection()
+    // 订阅传输状态变更（start/unit-start/chunk/end）：事件驱动实时刷新，
+    // subscribe 会立即回调一次，无需轮询兜底
+    this.bindSyncProgress()
+  },
+
+  onHide() {
+    this.unbindSyncProgress()
+  },
+
+  onDestroy() {
+    this.unbindSyncProgress()
+  },
+
+  // 订阅全局同步状态：清单/进度变化时刷新本页列表与进度条
+  bindSyncProgress() {
+    if (this._syncUnbind) return
+    const that = this
+    this._syncUnbind = audioSync.subscribe(function() {
+      that.refresh()
+    })
+  },
+
+  unbindSyncProgress() {
+    if (this._syncUnbind) {
+      const fn = this._syncUnbind
+      this._syncUnbind = null
+      fn()
+    }
+  },
+
+  onBackPress() {
+    router.replace({ uri: '/pages/start/loading' })
+    return true
+  },
+
+  goBack() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.replace({ uri: '/pages/start/loading' })
+  },
+
+  // 跳转同步帮助页
+  goHelp() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.push({ uri: '/pages/menu/custom/help' })
+  },
+
+  refresh() {
+    this.applySounds(audioSync.list())
+  },
+
+  // 预计算每个音效的展示字段（模板中避免调用方法）
+  applySounds(list) {
+    const that = this
+    // 批量模式下保留已勾选状态（按 id），避免 onShow 轮询 refresh 导致勾选丢失
+    const prevSelected = {}
+    if (this.batchMode) {
+      ;(this.sounds || []).forEach(function(s) { if (s.selected) prevSelected[s.id] = true })
+    }
+    this.sounds = (list || []).map(function(s) {
+      return {
+        id: s.id,
+        name: s.name,
+        mode: s.mode,
+        modeText: (s.mode === 'sequence') ? '多音频' : '单音频',
+        fileCount: (s.files ? s.files.length : 0) + '个文件',
+        hasImage: !!s.imageName,
+        sizeMismatch: !!s.sizeMismatch,
+        sizeText: that.formatSize(s.size),
+        selected: !!prevSelected[s.id]
+      }
+    })
+    this.selectedCount = this.countSelected()
+    this.updatePages()
+  },
+
+  // ===== 分页（每页 5 个音效） =====
+  updatePages() {
+    this.totalPages = Math.max(1, Math.ceil(this.sounds.length / PAGE_SIZE))
+    if (this.pageIndex > this.totalPages - 1) this.pageIndex = this.totalPages - 1
+    this.applyPage()
+  },
+
+  applyPage() {
+    const start = this.pageIndex * PAGE_SIZE
+    this.pageSounds = this.sounds.slice(start, start + PAGE_SIZE).map((s) => {
+      s.action = this.batchMode ? (s.selected ? '√' : '○') : '›'
+      return s
+    })
+  },
+
+  prevPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.pageIndex <= 0) return
+    this.pageIndex--
+    this.applyPage()
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  nextPage() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.pageIndex >= this.totalPages - 1) return
+    this.pageIndex++
+    this.applyPage()
+    // 手动翻页完成后滚动到页面最底部
+    this.scrollToBottom()
+  },
+
+  // 滚动到页面最底部（翻页渲染完成后执行；超大 top 值由框架钳制到最大滚动量）
+  scrollToBottom() {
+    const that = this
+    this.$nextTick(() => {
+      const scrollEl = that.$element('mainScroll')
+      if (scrollEl) {
+        scrollEl.scrollTo({ top: 1000, behavior: 'instant' })
+      }
+    })
+  },
+
+  checkConnection() {
+    const that = this
+    audioSync.getReadyState(function(status) {
+      that.connText = (status === 1) ? '已连接' : '未连接'
+    })
+  },
+
+  // 手动刷新列表：重新加载清单 + 刷新进度 + 更新连接状态
+  refreshList() {
+    const that = this
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    prompt.showToast({ message: '正在刷新...', duration: 1000 })
+    audioSync.load(function(list) {
+      that.applySounds(list)
+      that.refresh()
+    })
+    this.checkConnection()
+  },
+
+  // 列表项点击：批量模式下勾选，否则删除（删除弹确认）
+  onItemTap(item) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    if (this.batchMode) {
+      this.toggleSelect(item)
+    } else {
+      this.deleteSound(item)
+    }
+  },
+
+  // 点击删除（自绘确认弹层）
+  deleteSound(item) {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.confirmTarget = item
+    this.showConfirm('删除音效', '确定删除「' + item.name + '」？', 'single')
+  },
+
+  // 打开确认弹层
+  showConfirm(title, message, action) {
+    this.confirmTitle = title
+    this.confirmMessage = message
+    this.pendingAction = action
+    this.confirmVisible = true
+  },
+
+  // 确认执行
+  doConfirm() {
+    const action = this.pendingAction
+    this.confirmVisible = false
+    this.pendingAction = ''
+    if (action === 'single') {
+      const item = this.confirmTarget
+      this.confirmTarget = null
+      if (item) {
+        audioSync.removeById(item.id)
+        this.refresh()
+        prompt.showToast({ message: '已删除', duration: 1500 })
+      }
+    } else if (action === 'batch') {
+      const selected = this.confirmSelected || []
+      this.confirmSelected = []
+      selected.forEach(function(s) { audioSync.removeById(s.id) })
+      this.exitBatchMode()
+      this.refresh()
+      prompt.showToast({ message: '已删除 ' + selected.length + ' 个音效', duration: 1500 })
+    } else if (action === 'clear') {
+      audioSync.clearAll()
+      this.refresh()
+      prompt.showToast({ message: '已清空自定义音频', duration: 1500 })
+    }
+  },
+
+  // 取消确认
+  cancelConfirm() {
+    this.confirmVisible = false
+    this.pendingAction = ''
+    this.confirmTarget = null
+    this.confirmSelected = []
+  },
+
+  // ===== 批量删除 =====
+  enterBatchMode() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.batchMode = true
+    this.selectedCount = 0
+    this.applyPage()
+  },
+
+  exitBatchMode() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.batchMode = false
+    this.selectedCount = 0
+    ;(this.sounds || []).forEach(function(s) { s.selected = false })
+    this.applyPage()
+  },
+
+  toggleSelect(item) {
+    item.selected = !item.selected
+    this.selectedCount = this.countSelected()
+    this.applyPage()
+  },
+
+  countSelected() {
+    let n = 0
+    ;(this.sounds || []).forEach(function(s) { if (s.selected) n++ })
+    return n
+  },
+
+  batchDelete() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    const selected = (this.sounds || []).filter(function(s) { return s.selected })
+    if (selected.length === 0) {
+      prompt.showToast({ message: '请先选择音效', duration: 1500 })
+      return
+    }
+    this.confirmSelected = selected
+    this.showConfirm('批量删除', '确定删除选中的 ' + selected.length + ' 个音效？', 'batch')
+  },
+
+  clearAll() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    this.showConfirm('清空全部', '确定清空全部自定义音效？', 'clear')
+  },
+
+  formatSize(size) {
+    const s = parseInt(size, 10)
+    if (!s) return '未知大小'
+    if (s >= 1024 * 1024) return (s / 1024 / 1024).toFixed(1) + 'MB'
+    if (s >= 1024) return Math.round(s / 1024) + 'KB'
+    return s + 'B'
+  }
+}
+</script>

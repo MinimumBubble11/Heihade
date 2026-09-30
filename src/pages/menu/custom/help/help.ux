@@ -1,0 +1,229 @@
+<template>
+  <stack class="root-stack">
+    <scroll class="page" scroll-y="true" bounces="true">
+      <text class="title">同步帮助</text>
+      <text class="subtitle">如何使用「AstroBox」同步自定义音效</text>
+
+      <!-- 步骤 1 -->
+      <div class="step">
+        <div class="step-num"><text class="step-num-text">1</text></div>
+        <text class="step-text">自定义音效请将设备连接至安装了「嘿哈嘚 音频同步」插件的「AstroBox」</text>
+      </div>
+
+      <!-- 步骤 2：下载二维码 -->
+      <div class="step">
+        <div class="step-num"><text class="step-num-text">2</text></div>
+        <text class="step-text">如您还没有「AstroBox」可扫描下方二维码进行下载</text>
+        <qrcode class="qr-code" value="http://astrobox.online" style="color: #000;"></qrcode>
+        <text class="step-url">http://astrobox.online</text>
+      </div>
+
+      <!-- 步骤 3：文档二维码 -->
+      <div class="step">
+        <div class="step-num"><text class="step-num-text">3</text></div>
+        <text class="step-text">如果您不会使用「AstroBox」请扫描下方二维码查看软件文档</text>
+        <qrcode class="qr-code" value="http://abox.run" style="color: #000;"></qrcode>
+        <text class="step-url">http://abox.run</text>
+      </div>
+
+      <!-- 步骤 4 -->
+      <div class="step">
+        <div class="step-num"><text class="step-num-text">4</text></div>
+        <text class="step-text">完成「AstroBox」的设置后在插件市场下载「嘿哈嘚 音频同步」插件并连接设备</text>
+      </div>
+
+      <!-- 步骤 5 -->
+      <div class="step">
+        <div class="step-num"><text class="step-num-text">5</text></div>
+        <text class="step-text">当设备处于音效管理页时，顶部会显示与「AstroBox」的连接状态，确保为已连接即可使用插件同步音效</text>
+      </div>
+
+      <!-- 温馨提示 -->
+      <div class="tip-box">
+        <text class="tip-title">温馨提示</text>
+        <text class="tip-text">如无法扫码，请在浏览器中手动输入上方网址访问</text>
+        <text class="tip-text">同步时请确保手表「嘿哈嘚」处于音效管理页</text>
+        <text class="tip-text">插件提示完成传输后需要等待手表完成解码等步骤才会显示音效</text>
+        <text class="tip-text">插件会自动压缩图片，音频有需要可使用插件内推荐的工具进行压缩</text>
+      </div>
+
+      <div class="bottom-space"></div>
+    </scroll>
+
+    <!-- 固定返回按钮 -->
+    <div class="back-wrapper">
+      <input class="back-button-fixed" type="button" value="&lt; 返回" onclick="goBack" />
+    </div>
+  </stack>
+</template>
+
+<style>
+.root-stack {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background-color: #000000;
+}
+
+.page {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 100%;
+  flex-direction: column;
+  align-items: center;
+  background-color: #000000;
+}
+
+/* 圆屏：上下安全区 */
+@media (shape: circle) {
+  .page { padding: 35px 10px; }
+}
+
+/* 方屏：小边距 */
+@media (shape: rect) {
+  .page { padding: 30px 0; }
+}
+
+.title {
+  font-size: 18dp;
+  color: #4ccfff;
+  font-weight: bold;
+  margin-bottom: 4dp;
+}
+
+.subtitle {
+  font-size: 12dp;
+  color: #888888;
+  margin-bottom: 12dp;
+}
+
+.step {
+  width: 92%;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 14dp;
+}
+
+.step-num {
+  width: 22dp;
+  height: 22dp;
+  border-radius: 11dp;
+  background-color: #2c5c74;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-right: 8dp;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-bottom: 6dp;
+}
+
+.step-num-text {
+  font-size: 13dp;
+  color: #4ccfff;
+  font-weight: bold;
+}
+
+.step-text {
+  width: 100%;
+  font-size: 13dp;
+  color: #dddddd;
+  line-height: 18dp;
+  text-align: left;
+}
+
+.qr-code {
+  width: 70dp;
+  height: 70dp;
+  padding: 3dp;
+  background-color: #ffffff;
+  border-radius: 4px;
+  margin-top: 8dp;
+}
+
+.step-url {
+  width: 100%;
+  font-size: 11dp;
+  color: #77aabb;
+  text-align: center;
+  margin-top: 4dp;
+}
+
+.tip-box {
+  width: 92%;
+  padding: 10px 12px;
+  margin-top: 4dp;
+  background-color: #1d2f3a;
+  border-radius: 12px;
+  border: 2px solid #2c5c74;
+  flex-direction: column;
+}
+
+.tip-title {
+  font-size: 14dp;
+  color: #4ccfff;
+  font-weight: bold;
+  margin-bottom: 6dp;
+}
+
+.tip-text {
+  font-size: 12dp;
+  color: #bbccdd;
+  line-height: 16dp;
+  margin-bottom: 2dp;
+}
+
+.bottom-space {
+  width: 100%;
+  height: 30px;
+}
+
+.back-wrapper {
+  background-color: #000000;
+  position: absolute;
+  width: 100%;
+  height: 35dp;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.back-button-fixed {
+  width: 53dp;
+  height: 23dp;
+  border-radius: 14dp;
+  background-color: #222222;
+  font-size: 12dp;
+  color: #cccccc;
+}
+</style>
+
+<script>
+import router from '@system.router'
+import vibrator from '@system.vibrator'
+import vibration from '../../../../common/vibrate'
+
+export default {
+  private: {
+    vibrationEnabled: true,
+    vibrationMode: 'short'
+  },
+
+  onInit() {
+    vibration.loadSetting().then((vib) => {
+      this.vibrationEnabled = vib.enabled
+      this.vibrationMode = vib.mode
+    })
+  },
+
+  onBackPress() {
+    router.back()
+    return true
+  },
+
+  goBack() {
+    if (this.vibrationEnabled) vibrator.vibrate({ mode: this.vibrationMode })
+    router.back()
+  }
+}
+</script>
